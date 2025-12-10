@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Trash2, X, Tag, Ticket, Package } from 'lucide-react';
 import { productsService, Product as APIProduct } from '@/lib/services/products';
+import { formatIDR } from '@/lib/utils/currency';
 
 // Map API Product type to local Product type
 interface Product extends APIProduct {
@@ -300,13 +301,13 @@ export default function ProductsPage() {
                     <div className="text-sm text-gray-900">
                       {product.discount?.enabled ? (
                         <div>
-                          <span className="line-through text-gray-400">${product.price.toFixed(2)}</span>
+                          <span className="line-through text-gray-400">Rp {formatIDR(product.price)}</span>
                           <span className="ml-2 text-green-600 font-semibold">
-                            ${calculateFinalPrice(product).toFixed(2)}
+                            Rp {formatIDR(calculateFinalPrice(product))}
                           </span>
                         </div>
                       ) : (
-                        <span>${product.price.toFixed(2)}</span>
+                        <span>Rp {formatIDR(product.price)}</span>
                       )}
                     </div>
                   </td>
@@ -339,7 +340,7 @@ export default function ProductsPage() {
                           <Tag className="w-3 h-3" />
                           {product.discount.type === 'percentage'
                             ? `${product.discount.value}%`
-                            : `$${product.discount.value}`}
+                            : `Rp ${formatIDR(product.discount.value)}`}
                         </span>
                       )}
                       {product.voucher?.enabled && (
@@ -494,11 +495,11 @@ export default function ProductsPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Price ($) *
+                        Price (IDR) *
                       </label>
                       <input
                         type="number"
-                        step="0.01"
+                        step="1"
                         value={formData.price}
                         onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
@@ -622,7 +623,7 @@ export default function ProductsPage() {
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                         >
                           <option value="percentage">Percentage (%)</option>
-                          <option value="fixed">Fixed Amount ($)</option>
+                          <option value="fixed">Fixed Amount (IDR)</option>
                         </select>
                       </div>
 
@@ -712,7 +713,7 @@ export default function ProductsPage() {
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                         >
                           <option value="percentage">Percentage (%)</option>
-                          <option value="fixed">Fixed Amount ($)</option>
+                          <option value="fixed">Fixed Amount (IDR)</option>
                         </select>
                       </div>
 

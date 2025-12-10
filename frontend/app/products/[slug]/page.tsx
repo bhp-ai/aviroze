@@ -9,6 +9,7 @@ import { productsService, Product } from '@/lib/services/products';
 import { commentsService, Comment, CommentCreate } from '@/lib/services/comments';
 import { authService } from '@/lib/services/auth';
 import { useCart } from '@/contexts/CartContext';
+import { formatIDR, calculateDiscountedPrice } from '@/lib/utils/currency';
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -159,6 +160,9 @@ export default function ProductDetailPage() {
     ? (comments.reduce((sum, c) => sum + c.rating, 0) / comments.length).toFixed(1)
     : '0.0';
 
+  const discountedPrice = calculateDiscountedPrice(product.price, product.discount);
+  const discountPercentage = product.discount?.enabled && product.discount?.type === 'percentage' ? product.discount.value : null;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
@@ -187,6 +191,12 @@ export default function ProductDetailPage() {
                 <ShoppingBag className="w-16 h-16 text-gray-400" />
               </div>
             )}
+            {/* Discount Badge */}
+            {discountPercentage && (
+              <div className="absolute top-4 left-4 bg-red-600 text-white px-3 py-2 text-sm font-bold z-10">
+                -{discountPercentage}% OFF
+              </div>
+            )}
           </div>
         </div>
 
@@ -203,9 +213,22 @@ export default function ProductDetailPage() {
               </span>
             </div>
           </div>
-          <p className="text-2xl text-gray-900 mb-6">
-            IDR {product.price.toLocaleString('id-ID')}
-          </p>
+          <div className="mb-6">
+            {discountedPrice ? (
+              <div className="flex items-center gap-3">
+                <p className="text-3xl font-bold text-red-600">
+                  IDR {formatIDR(discountedPrice)}
+                </p>
+                <p className="text-xl text-gray-400 line-through">
+                  IDR {formatIDR(product.price)}
+                </p>
+              </div>
+            ) : (
+              <p className="text-2xl text-gray-900">
+                IDR {formatIDR(product.price)}
+              </p>
+            )}
+          </div>
 
           <div className="mb-6">
             <p className="text-gray-600 leading-relaxed">

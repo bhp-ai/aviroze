@@ -7,6 +7,7 @@ import { Product as ApiProduct } from '@/lib/services/products';
 import { useCart } from '@/contexts/CartContext';
 import { ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
+import { formatIDR, calculateDiscountedPrice } from '@/lib/utils/currency';
 
 interface ProductCardProps {
   product: OldProduct | ApiProduct;
@@ -49,6 +50,10 @@ export default function ProductCard({ product }: ProductCardProps) {
     }
   };
 
+  const apiDiscount = isApi && 'discount' in product ? product.discount : undefined;
+  const discountedPrice = calculateDiscountedPrice(product.price, apiDiscount);
+  const discountPercentage = apiDiscount?.enabled && apiDiscount?.type === 'percentage' ? apiDiscount.value : null;
+
   return (
     <div className="group relative">
       {/* Product Image */}
@@ -62,6 +67,13 @@ export default function ProductCard({ product }: ProductCardProps) {
             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
           />
         </Link>
+
+        {/* Discount Badge */}
+        {discountPercentage && (
+          <div className="absolute top-3 left-3 bg-red-600 text-white px-2 py-1 text-xs font-bold z-10">
+            -{discountPercentage}%
+          </div>
+        )}
 
         {!inStock && (
           <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center">
@@ -88,9 +100,22 @@ export default function ProductCard({ product }: ProductCardProps) {
           <h3 className="text-sm font-medium text-gray-900 group-hover:underline">
             {product.name}
           </h3>
-          <p className="text-sm text-gray-600">
-            IDR {product.price.toLocaleString('id-ID')}
-          </p>
+          <div className="flex items-center gap-2">
+            {discountedPrice ? (
+              <>
+                <p className="text-sm font-semibold text-red-600">
+                  IDR {formatIDR(discountedPrice)}
+                </p>
+                <p className="text-xs text-gray-400 line-through">
+                  IDR {formatIDR(product.price)}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-gray-600">
+                IDR {formatIDR(product.price)}
+              </p>
+            )}
+          </div>
           {product.colors && product.colors.length > 0 && (
             <div className="flex gap-1 mt-2">
               {product.colors.slice(0, 4).map((color, index) => (

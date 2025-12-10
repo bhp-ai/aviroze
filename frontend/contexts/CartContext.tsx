@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Product } from '@/lib/services/products';
+import { getFinalPrice } from '@/lib/utils/currency';
 
 export interface CartItem {
   product: Product;
@@ -107,7 +108,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const getCartTotal = () => {
     return items.reduce((total, item) => {
-      const price = item.product.price;
+      // Use discounted price if available, otherwise use original price
+      const price = getFinalPrice(item.product.price, item.product.discount);
       return total + price * item.quantity;
     }, 0);
   };
