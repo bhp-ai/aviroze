@@ -49,6 +49,7 @@ export default function ProductsPage() {
     category: '',
     stock: 0,
     image: '',
+    images: [],
     colors: [],
     createdAt: '',
     discount: {
@@ -106,7 +107,21 @@ export default function ProductsPage() {
   const handleOpenModal = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
-      setFormData(product);
+      setFormData({
+        ...product,
+        discount: product.discount || {
+          enabled: false,
+          type: 'percentage',
+          value: 0,
+        },
+        voucher: product.voucher || {
+          enabled: false,
+          code: '',
+          discountType: 'percentage',
+          discountValue: 0,
+          expiryDate: '',
+        },
+      });
       setImageFiles([]);
       setImagePreviews([]);
     } else {
@@ -149,7 +164,7 @@ export default function ProductsPage() {
   };
 
   const handleExportCSV = () => {
-    const csvData = filteredProducts.map(product => ({
+    const csvData = products.map(product => ({
       id: product.id,
       name: product.name,
       description: product.description,
@@ -287,7 +302,7 @@ export default function ProductsPage() {
         {/* Export CSV Button */}
         <button
           onClick={handleExportCSV}
-          disabled={filteredProducts.length === 0}
+          disabled={products.length === 0}
           className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Download className="w-5 h-5" />
@@ -708,10 +723,14 @@ export default function ProductsPage() {
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={formData.discount?.enabled}
+                        checked={formData.discount?.enabled || false}
                         onChange={(e) => setFormData({
                           ...formData,
-                          discount: { ...formData.discount!, enabled: e.target.checked }
+                          discount: {
+                            enabled: e.target.checked,
+                            type: formData.discount?.type || 'percentage',
+                            value: formData.discount?.value || 0
+                          }
                         })}
                         className="w-4 h-4"
                       />
@@ -726,10 +745,14 @@ export default function ProductsPage() {
                           Discount Type
                         </label>
                         <select
-                          value={formData.discount.type}
+                          value={formData.discount?.type || 'percentage'}
                           onChange={(e) => setFormData({
                             ...formData,
-                            discount: { ...formData.discount!, type: e.target.value as 'percentage' | 'fixed' }
+                            discount: {
+                              enabled: formData.discount?.enabled || false,
+                              type: e.target.value as 'percentage' | 'fixed',
+                              value: formData.discount?.value || 0
+                            }
                           })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                         >
@@ -745,10 +768,14 @@ export default function ProductsPage() {
                         <input
                           type="number"
                           step="0.01"
-                          value={formData.discount.value}
+                          value={formData.discount?.value || 0}
                           onChange={(e) => setFormData({
                             ...formData,
-                            discount: { ...formData.discount!, value: parseFloat(e.target.value) }
+                            discount: {
+                              enabled: formData.discount?.enabled || false,
+                              type: formData.discount?.type || 'percentage',
+                              value: parseFloat(e.target.value) || 0
+                            }
                           })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                         />
@@ -767,10 +794,16 @@ export default function ProductsPage() {
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={formData.voucher?.enabled}
+                        checked={formData.voucher?.enabled || false}
                         onChange={(e) => setFormData({
                           ...formData,
-                          voucher: { ...formData.voucher!, enabled: e.target.checked }
+                          voucher: {
+                            enabled: e.target.checked,
+                            code: formData.voucher?.code || '',
+                            discountType: formData.voucher?.discountType || 'percentage',
+                            discountValue: formData.voucher?.discountValue || 0,
+                            expiryDate: formData.voucher?.expiryDate || ''
+                          }
                         })}
                         className="w-4 h-4"
                       />
@@ -786,10 +819,16 @@ export default function ProductsPage() {
                         </label>
                         <input
                           type="text"
-                          value={formData.voucher.code}
+                          value={formData.voucher?.code || ''}
                           onChange={(e) => setFormData({
                             ...formData,
-                            voucher: { ...formData.voucher!, code: e.target.value.toUpperCase() }
+                            voucher: {
+                              enabled: formData.voucher?.enabled || false,
+                              code: e.target.value.toUpperCase(),
+                              discountType: formData.voucher?.discountType || 'percentage',
+                              discountValue: formData.voucher?.discountValue || 0,
+                              expiryDate: formData.voucher?.expiryDate || ''
+                            }
                           })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                           placeholder="e.g., SAVE20"
@@ -802,10 +841,16 @@ export default function ProductsPage() {
                         </label>
                         <input
                           type="date"
-                          value={formData.voucher.expiryDate}
+                          value={formData.voucher?.expiryDate || ''}
                           onChange={(e) => setFormData({
                             ...formData,
-                            voucher: { ...formData.voucher!, expiryDate: e.target.value }
+                            voucher: {
+                              enabled: formData.voucher?.enabled || false,
+                              code: formData.voucher?.code || '',
+                              discountType: formData.voucher?.discountType || 'percentage',
+                              discountValue: formData.voucher?.discountValue || 0,
+                              expiryDate: e.target.value
+                            }
                           })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                         />
@@ -816,10 +861,16 @@ export default function ProductsPage() {
                           Discount Type
                         </label>
                         <select
-                          value={formData.voucher.discountType}
+                          value={formData.voucher?.discountType || 'percentage'}
                           onChange={(e) => setFormData({
                             ...formData,
-                            voucher: { ...formData.voucher!, discountType: e.target.value as 'percentage' | 'fixed' }
+                            voucher: {
+                              enabled: formData.voucher?.enabled || false,
+                              code: formData.voucher?.code || '',
+                              discountType: e.target.value as 'percentage' | 'fixed',
+                              discountValue: formData.voucher?.discountValue || 0,
+                              expiryDate: formData.voucher?.expiryDate || ''
+                            }
                           })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                         >
@@ -835,10 +886,16 @@ export default function ProductsPage() {
                         <input
                           type="number"
                           step="0.01"
-                          value={formData.voucher.discountValue}
+                          value={formData.voucher?.discountValue || 0}
                           onChange={(e) => setFormData({
                             ...formData,
-                            voucher: { ...formData.voucher!, discountValue: parseFloat(e.target.value) }
+                            voucher: {
+                              enabled: formData.voucher?.enabled || false,
+                              code: formData.voucher?.code || '',
+                              discountType: formData.voucher?.discountType || 'percentage',
+                              discountValue: parseFloat(e.target.value) || 0,
+                              expiryDate: formData.voucher?.expiryDate || ''
+                            }
                           })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                         />

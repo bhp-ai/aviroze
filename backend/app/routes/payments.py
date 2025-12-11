@@ -160,6 +160,10 @@ async def create_checkout_session(
             success_url=f"{frontend_url}/checkout/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{frontend_url}/checkout/cancel",
             customer_email=current_user.email,
+            billing_address_collection="required",
+            shipping_address_collection={
+                "allowed_countries": ["US", "CA", "GB", "AU", "ID", "SG", "MY", "TH", "PH", "VN"],
+            },
             metadata={
                 "user_id": str(current_user.id),
                 "user_email": current_user.email,
