@@ -87,13 +87,31 @@ async def create_checkout_session(
             if item.selected_color:
                 product_name += f" - Color: {item.selected_color}"
 
+            # Prepare product data for Stripe
+            product_data = {
+                "name": product_name,
+                "description": product.description[:100] if product.description else "",
+            }
+
+            # Add product image URL if available
+            backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
+
+            # For development: Use a publicly accessible placeholder image
+            # For production: Use your actual backend URL with product images
+            if backend_url.startswith("http://localhost") or backend_url.startswith("http://127.0.0.1"):
+                # Development mode - use publicly accessible placeholder
+                product_data["images"] = ["https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=400&fit=crop"]
+            else:
+                # Production mode - use actual product images
+                if product.images and len(product.images) > 0:
+                    product_data["images"] = [f"{backend_url}/api/products/{product.id}/image"]
+                elif product.image:
+                    product_data["images"] = [f"{backend_url}/api/products/{product.id}/image"]
+
             line_items.append({
                 "price_data": {
                     "currency": "usd",
-                    "product_data": {
-                        "name": product_name,
-                        "description": product.description[:100] if product.description else "",
-                    },
+                    "product_data": product_data,
                     "unit_amount": unit_amount_cents,
                 },
                 "quantity": item.quantity,
@@ -176,10 +194,13 @@ async def get_session_status(
 ):
     """Get the status of a checkout session and create order if paid"""
     try:
+        print(f"[DEBUG] Retrieving session: {session_id}")
         session = stripe.checkout.Session.retrieve(session_id)
+        print(f"[DEBUG] Session payment status: {session.payment_status}")
 
         # If payment is successful and order doesn't exist yet, create it
         if session.payment_status == 'paid':
+            print(f"[DEBUG] Payment is paid, checking for existing order...")
             # Check if order already exists for this session
             from app.db_models import Order, OrderItem, Product, OrderStatus
             existing_order = db.query(Order).filter(
@@ -187,12 +208,16 @@ async def get_session_status(
                 Order.payment_method == f"stripe_{session_id}"
             ).first()
 
-            if not existing_order:
+            if existing_order:
+                print(f"[DEBUG] Order already exists: {existing_order.id}")
+            else:
+                print(f"[DEBUG] Creating new order...")
                 # Get cart data from session metadata
                 cart_data_str = session.metadata.get('cart_data')
                 if cart_data_str:
                     import json
                     cart_items = json.loads(cart_data_str)
+                    print(f"[DEBUG] Cart items: {len(cart_items)}")
 
                     # Calculate total in IDR from cart items (not from Stripe which is in USD)
                     items_total = sum(item['price'] * item['quantity'] for item in cart_items)
@@ -221,6 +246,7 @@ async def get_session_status(
                         shipping_address = f"Email: {session.customer_email}"
 
                     # Create order
+                    print(f"[DEBUG] Creating order for user {current_user.id}")
                     new_order = Order(
                         user_id=current_user.id,
                         status=OrderStatus.PROCESSING,
@@ -232,11 +258,13 @@ async def get_session_status(
 
                     db.add(new_order)
                     db.flush()  # Get the order ID
+                    print(f"[DEBUG] Order created with ID: {new_order.id}")
 
                     # Create order items and update stock
                     for item in cart_items:
                         product = db.query(Product).filter(Product.id == item['product_id']).first()
                         if product:
+                            print(f"[DEBUG] Adding order item: {product.name} x{item['quantity']}")
                             order_item = OrderItem(
                                 order_id=new_order.id,
                                 product_id=item['product_id'],
@@ -249,13 +277,25 @@ async def get_session_status(
                             product.stock = max(0, product.stock - item['quantity'])
 
                     db.commit()
+                    print(f"[DEBUG] Order committed successfully!")
+                else:
+                    print(f"[DEBUG] No cart data found in session metadata")
 
         return {
             "status": session.payment_status,
             "customer_email": session.customer_email
         }
     except stripe.error.StripeError as e:
+        print(f"[ERROR] Stripe error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Stripe error: {str(e)}"
+        )
+    except Exception as e:
+        print(f"[ERROR] Unexpected error in get_session_status: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred: {str(e)}"
         )
