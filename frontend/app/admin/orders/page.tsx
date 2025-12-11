@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Package, Truck, CheckCircle, XCircle, Clock, Filter } from 'lucide-react';
+import { Package, Truck, CheckCircle, XCircle, Clock, Filter, Download } from 'lucide-react';
 import { ordersService, Order } from '@/lib/services/orders';
 import { authService } from '@/lib/services/auth';
 import { formatIDR } from '@/lib/utils/currency';
 import { useToast } from '@/contexts/ToastContext';
+import { exportToCSV, formatDateForCSV, formatCurrencyForCSV } from '@/lib/utils/csv-export';
 
 export default function AdminOrdersPage() {
   const router = useRouter();
@@ -55,6 +56,38 @@ export default function AdminOrdersPage() {
         'error'
       );
     }
+  };
+
+  const handleExportCSV = () => {
+    const csvData = orders.map(order => ({
+      id: order.id,
+      user_id: order.user_id,
+      status: order.status,
+      total_amount: order.total_amount,
+      payment_method: order.payment_method || 'N/A',
+      payment_status: order.payment_status,
+      shipping_address: order.shipping_address || 'N/A',
+      items_count: order.items.length,
+      items: order.items.map(item => `${item.product_name} (x${item.quantity})`).join('; '),
+      created_at: order.created_at,
+    }));
+
+    const columns = [
+      { header: 'Order ID', key: 'id' },
+      { header: 'User ID', key: 'user_id' },
+      { header: 'Status', key: 'status' },
+      { header: 'Total Amount', key: 'total_amount', format: formatCurrencyForCSV },
+      { header: 'Payment Method', key: 'payment_method' },
+      { header: 'Payment Status', key: 'payment_status' },
+      { header: 'Shipping Address', key: 'shipping_address' },
+      { header: 'Items Count', key: 'items_count' },
+      { header: 'Items', key: 'items' },
+      { header: 'Order Date', key: 'created_at', format: formatDateForCSV },
+    ];
+
+    const filterLabel = statusFilter ? `_${statusFilter}` : '_all';
+    const filename = `orders${filterLabel}_${new Date().toISOString().split('T')[0]}.csv`;
+    exportToCSV(csvData, columns, filename);
   };
 
   const getStatusIcon = (status: string) => {
@@ -108,6 +141,14 @@ export default function AdminOrdersPage() {
           <h1 className="text-3xl font-bold text-gray-900">Orders Management</h1>
           <p className="text-gray-600 mt-1">Manage and track all customer orders</p>
         </div>
+        <button
+          onClick={handleExportCSV}
+          disabled={orders.length === 0}
+          className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download className="w-5 h-5" />
+          <span>Export CSV</span>
+        </button>
       </div>
 
       {/* Filter */}

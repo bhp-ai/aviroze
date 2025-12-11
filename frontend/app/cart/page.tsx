@@ -137,7 +137,7 @@ export default function CartPage() {
                 <div key={`${item.product.id}-${item.selectedSize || 'no-size'}-${item.selectedColor || 'no-color'}-${index}`} className="flex gap-4 p-4 border border-gray-200 rounded">
                   <div className="relative w-24 h-32 bg-gray-100">
                     <Image
-                      src={item.product.image || 'https://via.placeholder.com/200x300?text=No+Image'}
+                      src={item.product.images?.[0] || 'https://via.placeholder.com/200x300?text=No+Image'}
                       alt={item.product.name}
                       fill
                       className="object-cover"

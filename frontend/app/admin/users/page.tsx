@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, UserPlus, Edit, Trash2 } from 'lucide-react';
+import { Search, UserPlus, Edit, Trash2, Download } from 'lucide-react';
 import { usersService } from '@/lib/services/users';
 import { User } from '@/lib/services/auth';
+import { exportToCSV, formatDateForCSV } from '@/lib/utils/csv-export';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -42,6 +43,31 @@ export default function UsersPage() {
   // Filter users by search term and separate by role
   const adminUsers = users.filter(user => user.role === 'admin');
   const regularUsers = users.filter(user => user.role === 'user');
+
+  const handleExportCSV = () => {
+    const usersToExport = activeTab === 'admin' ? adminUsers : regularUsers;
+
+    const csvData = usersToExport.map(user => ({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      created_at: user.created_at,
+    }));
+
+    const columns = [
+      { header: 'ID', key: 'id' },
+      { header: 'Username', key: 'username' },
+      { header: 'Email', key: 'email' },
+      { header: 'Role', key: 'role' },
+      { header: 'Status', key: 'status' },
+      { header: 'Joined Date', key: 'created_at', format: formatDateForCSV },
+    ];
+
+    const filename = `users_${activeTab}_${new Date().toISOString().split('T')[0]}.csv`;
+    exportToCSV(csvData, columns, filename);
+  };
 
   // Reusable table component
   const UserTable = ({ users, emptyMessage }: { users: any[], emptyMessage: string }) => (
@@ -157,6 +183,16 @@ export default function UsersPage() {
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 transition-colors"
           />
         </div>
+
+        {/* Export CSV Button */}
+        <button
+          onClick={handleExportCSV}
+          disabled={users.length === 0}
+          className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download className="w-5 h-5" />
+          <span>Export CSV</span>
+        </button>
 
         {/* Add User Button */}
         <button className="inline-flex items-center gap-2 bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-800 transition-colors">

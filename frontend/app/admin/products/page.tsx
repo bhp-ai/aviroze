@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, Plus, Edit, Trash2, X, Tag, Ticket, Package } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, Tag, Ticket, Package, Download } from 'lucide-react';
 import { productsService, Product as APIProduct } from '@/lib/services/products';
 import { formatIDR } from '@/lib/utils/currency';
+import { exportToCSV, formatDateForCSV, formatCurrencyForCSV } from '@/lib/utils/csv-export';
 
 // Map API Product type to local Product type
 interface Product extends APIProduct {
@@ -147,6 +148,37 @@ export default function ProductsPage() {
     setImagePreviews([]);
   };
 
+  const handleExportCSV = () => {
+    const csvData = filteredProducts.map(product => ({
+      id: product.id,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      category: product.category,
+      stock: product.stock,
+      discount_enabled: product.discount?.enabled ? 'Yes' : 'No',
+      discount_type: product.discount?.type || '',
+      discount_value: product.discount?.value || '',
+      created_at: product.created_at || product.createdAt,
+    }));
+
+    const columns = [
+      { header: 'ID', key: 'id' },
+      { header: 'Name', key: 'name' },
+      { header: 'Description', key: 'description' },
+      { header: 'Price', key: 'price', format: formatCurrencyForCSV },
+      { header: 'Category', key: 'category' },
+      { header: 'Stock', key: 'stock' },
+      { header: 'Discount Enabled', key: 'discount_enabled' },
+      { header: 'Discount Type', key: 'discount_type' },
+      { header: 'Discount Value', key: 'discount_value' },
+      { header: 'Created At', key: 'created_at', format: formatDateForCSV },
+    ];
+
+    const filename = `products_${new Date().toISOString().split('T')[0]}.csv`;
+    exportToCSV(csvData, columns, filename);
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
@@ -251,6 +283,16 @@ export default function ProductsPage() {
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 transition-colors"
           />
         </div>
+
+        {/* Export CSV Button */}
+        <button
+          onClick={handleExportCSV}
+          disabled={filteredProducts.length === 0}
+          className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download className="w-5 h-5" />
+          <span>Export CSV</span>
+        </button>
 
         {/* Add Product Button */}
         <button

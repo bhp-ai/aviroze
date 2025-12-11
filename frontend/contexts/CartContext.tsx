@@ -27,6 +27,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isClient, setIsClient] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Load cart from localStorage on mount
   useEffect(() => {
@@ -39,16 +40,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
         console.error('Failed to load cart:', error);
       }
     }
+    setIsInitialized(true);
   }, []);
 
-  // Save cart to localStorage whenever it changes
+  // Save cart to localStorage whenever it changes (but skip initial load)
   useEffect(() => {
-    if (isClient) {
+    if (isClient && isInitialized) {
       localStorage.setItem('cart', JSON.stringify(items));
       // Dispatch custom event for cart updates
       window.dispatchEvent(new Event('cartUpdate'));
     }
-  }, [items, isClient]);
+  }, [items, isClient, isInitialized]);
 
   const addToCart = (product: Product, quantity = 1, size?: string, color?: string): boolean => {
     // Check if user is logged in
@@ -74,7 +76,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (existingItemIndex > -1) {
         // Update quantity if item exists
         const newItems = [...prevItems];
-        newItems[existingItemIndex].quantity += quantity;
+        const newQuantity = newItems[existingItemIndex].quantity + quantity;
+        newItems[existingItemIndex] = { ...newItems[existingItemIndex], quantity: newQuantity };
         return newItems;
       } else {
         // Add new item

@@ -93,16 +93,13 @@ async def create_checkout_session(
                 "description": product.description[:100] if product.description else "",
             }
 
-            # Add product image URL if available
+            # Note: Stripe requires publicly accessible image URLs
+            # If using localhost, images won't display in Stripe checkout
+            # Consider using ngrok or deploying to access images in Stripe
             backend_url = os.getenv("BACKEND_URL", "http://localhost:8000")
 
-            # For development: Use a publicly accessible placeholder image
-            # For production: Use your actual backend URL with product images
-            if backend_url.startswith("http://localhost") or backend_url.startswith("http://127.0.0.1"):
-                # Development mode - use publicly accessible placeholder
-                product_data["images"] = ["https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=400&fit=crop"]
-            else:
-                # Production mode - use actual product images
+            # Try to add product images if backend is publicly accessible
+            if not (backend_url.startswith("http://localhost") or backend_url.startswith("http://127.0.0.1")):
                 if product.images and len(product.images) > 0:
                     product_data["images"] = [f"{backend_url}/api/products/{product.id}/image"]
                 elif product.image:
