@@ -10,12 +10,27 @@ interface Product extends APIProduct {
   createdAt: string;
 }
 
-// Helper to check if image URL is valid (not a placeholder URL)
-const isValidImageUrl = (url: string | undefined) => {
-  if (!url || url.trim() === '') return false;
-  // Exclude placeholder URLs
-  if (url.includes('placeholder.com')) return false;
-  return true;
+// Helper component to display product image (now using base64 data URLs)
+const ProductImage = ({ images, productName, className }: { images: string[]; productName: string; className?: string }) => {
+  const [hasError, setHasError] = useState(false);
+  const imageUrl = images && images.length > 0 ? images[0] : '';
+
+  if (hasError || !imageUrl) {
+    return (
+      <div className={`rounded bg-gray-200 flex items-center justify-center flex-shrink-0 ${className || 'w-12 h-12'}`}>
+        <Package className="w-6 h-6 text-gray-400" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={productName}
+      className={`rounded object-cover ${className || 'w-12 h-12'}`}
+      onError={() => setHasError(true)}
+    />
+  );
 };
 
 export default function ProductsPage() {
@@ -49,6 +64,8 @@ export default function ProductsPage() {
     },
   });
   const [colorInput, setColorInput] = useState('');
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
   // Load products from API on mount
   useEffect(() => {
@@ -89,6 +106,8 @@ export default function ProductsPage() {
     if (product) {
       setEditingProduct(product);
       setFormData(product);
+      setImageFiles([]);
+      setImagePreviews([]);
     } else {
       setEditingProduct(null);
       setFormData({
@@ -98,7 +117,7 @@ export default function ProductsPage() {
         price: 0,
         category: '',
         stock: 0,
-        image: '',
+        images: [],
         colors: [],
         createdAt: new Date().toISOString(),
         discount: {
@@ -114,6 +133,8 @@ export default function ProductsPage() {
           expiryDate: '',
         },
       });
+      setImageFiles([]);
+      setImagePreviews([]);
     }
     setColorInput('');
     setIsModalOpen(true);
@@ -122,6 +143,30 @@ export default function ProductsPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingProduct(null);
+    setImageFiles([]);
+    setImagePreviews([]);
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newFiles = Array.from(files);
+      setImageFiles(prev => [...prev, ...newFiles]);
+
+      // Generate previews for all new files
+      newFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreviews(prev => [...prev, reader.result as string]);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setImageFiles(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,18 +181,17 @@ export default function ProductsPage() {
         price: formData.price,
         category: formData.category,
         stock: formData.stock,
-        image: formData.image || '',
         colors: formData.colors || [],
         discount: formData.discount,
         voucher: formData.voucher
       };
 
       if (editingProduct) {
-        // Update existing product
-        await productsService.update(formData.id, productData);
+        // Update existing product (replace images if new ones are provided)
+        await productsService.update(formData.id, productData, imageFiles.length > 0 ? imageFiles : undefined, true);
       } else {
         // Add new product
-        await productsService.create(productData);
+        await productsService.create(productData, imageFiles.length > 0 ? imageFiles : undefined);
       }
 
       // Refresh products list
@@ -255,21 +299,7 @@ export default function ProductsPage() {
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      {isValidImageUrl(product.image) ? (
-                        <img
-                          src={product.image}
-                          alt={product.name}
-                          className="w-12 h-12 rounded object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded bg-gray-200 flex items-center justify-center flex-shrink-0">
-                          <Package className="w-6 h-6 text-gray-400" />
-                        </div>
-                      )}
+                      <ProductImage images={product.images} productName={product.name} />
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">{product.name}</div>
                         <div className="text-sm text-gray-500">{product.description}</div>
@@ -462,34 +492,73 @@ export default function ProductsPage() {
                       <p className="text-xs text-gray-500 mt-1">Enter any category name</p>
                     </div>
 
-                    <div>
+                    <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Image URL
+                        Product Images
                       </label>
                       <input
-                        type="text"
-                        value={formData.image}
-                        onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleImageChange}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
-                        placeholder="Leave empty for default placeholder"
                       />
-                      <div className="mt-2">
-                        {isValidImageUrl(formData.image) ? (
-                          <img
-                            src={formData.image}
-                            alt="Preview"
-                            className="w-20 h-20 rounded object-cover border border-gray-200"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-20 h-20 rounded bg-gray-200 flex items-center justify-center border border-gray-200">
-                            <Package className="w-8 h-8 text-gray-400" />
+                      <p className="text-xs text-gray-500 mt-1">You can select multiple images</p>
+
+                      <div className="mt-3">
+                        {/* Show existing images */}
+                        {editingProduct && formData.images && formData.images.length > 0 && imagePreviews.length === 0 && (
+                          <div>
+                            <p className="text-xs text-gray-600 mb-2">Current images:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {formData.images.map((img, idx) => (
+                                <div key={idx} className="relative">
+                                  <img
+                                    src={img}
+                                    alt={`Current ${idx + 1}`}
+                                    className="w-20 h-20 rounded object-cover border border-gray-200"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2">
+                              Select new images to replace all current images
+                            </p>
                           </div>
                         )}
-                        <p className="text-xs text-gray-500 mt-1">Image preview</p>
+
+                        {/* Show new image previews */}
+                        {imagePreviews.length > 0 && (
+                          <div>
+                            <p className="text-xs text-gray-600 mb-2">New images to upload:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {imagePreviews.map((preview, idx) => (
+                                <div key={idx} className="relative">
+                                  <img
+                                    src={preview}
+                                    alt={`Preview ${idx + 1}`}
+                                    className="w-20 h-20 rounded object-cover border border-gray-200"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveImage(idx)}
+                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* No images */}
+                        {!editingProduct && imagePreviews.length === 0 && (
+                          <div className="flex items-center gap-2 text-gray-500">
+                            <Package className="w-5 h-5" />
+                            <span className="text-xs">No images selected</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 

@@ -9,6 +9,7 @@ import { productsService, Product } from '@/lib/services/products';
 import { commentsService, Comment, CommentCreate } from '@/lib/services/comments';
 import { authService } from '@/lib/services/auth';
 import { useCart } from '@/contexts/CartContext';
+import { useToast } from '@/contexts/ToastContext';
 import { formatIDR, calculateDiscountedPrice } from '@/lib/utils/currency';
 
 export default function ProductDetailPage() {
@@ -16,6 +17,7 @@ export default function ProductDetailPage() {
   const router = useRouter();
   const productId = parseInt(params.slug as string);
   const { addToCart } = useCart();
+  const toast = useToast();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -26,6 +28,7 @@ export default function ProductDetailPage() {
   const [selectedColor, setSelectedColor] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   // Comment form state
   const [commentText, setCommentText] = useState('');
@@ -71,15 +74,33 @@ export default function ProductDetailPage() {
     if (!product || product.stock === 0) return;
 
     setAddingToCart(true);
-    addToCart(product, quantity, undefined, selectedColor || undefined);
+    const result = addToCart(product, quantity, undefined, selectedColor || undefined);
 
-    // Reset quantity to 1 after adding
-    setQuantity(1);
-
-    // Show feedback
-    setTimeout(() => {
+    if (result === false) {
+      // User not logged in
+      toast.warning('Please login to add items to cart');
       setAddingToCart(false);
-    }, 1000);
+    } else {
+      // Successfully added
+      toast.success(`Added ${quantity} item(s) to cart!`);
+
+      // Reset quantity to 1 after adding
+      setQuantity(1);
+
+      // Show feedback
+      setTimeout(() => {
+        setAddingToCart(false);
+      }, 1000);
+    }
+  };
+
+  const handleAddToWishlist = () => {
+    if (!currentUser) {
+      toast.warning('Please login to add items to wishlist');
+      return;
+    }
+    // TODO: Implement wishlist functionality
+    toast.info('Wishlist feature coming soon!');
   };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
@@ -175,12 +196,12 @@ export default function ProductDetailPage() {
       </nav>
 
       <div className="grid md:grid-cols-2 gap-12 mb-12">
-        {/* Image */}
+        {/* Image Gallery */}
         <div>
-          <div className="relative aspect-[3/4] bg-gray-100">
-            {product.image ? (
+          <div className="relative aspect-[3/4] bg-gray-100 mb-4">
+            {product.images && product.images.length > 0 ? (
               <Image
-                src={product.image}
+                src={product.images[selectedImageIndex]}
                 alt={product.name}
                 fill
                 className="object-cover"
@@ -198,6 +219,29 @@ export default function ProductDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Image Thumbnails */}
+          {product.images && product.images.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto">
+              {product.images.map((img, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedImageIndex(idx)}
+                  className={`flex-shrink-0 w-20 h-20 border-2 rounded overflow-hidden ${
+                    selectedImageIndex === idx ? 'border-gray-900' : 'border-gray-200'
+                  }`}
+                >
+                  <Image
+                    src={img}
+                    alt={`${product.name} ${idx + 1}`}
+                    width={80}
+                    height={80}
+                    className="object-cover w-full h-full"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Product Info */}
@@ -294,7 +338,11 @@ export default function ProductDetailPage() {
               <ShoppingBag className="w-4 h-4" />
               {addingToCart ? 'Added!' : product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
             </button>
-            <button className="border border-gray-300 px-4 py-3 hover:border-gray-900 transition-colors">
+            <button
+              onClick={handleAddToWishlist}
+              className="border border-gray-300 px-4 py-3 hover:border-gray-900 transition-colors"
+              title="Add to wishlist"
+            >
               <Heart className="w-5 h-5" />
             </button>
           </div>

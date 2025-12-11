@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, LogOut, Menu, X, Package, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, Menu, X, Package, MessageSquare, ShoppingBag } from 'lucide-react';
+import { authService } from '@/lib/services/auth';
 
 export default function AdminLayout({
   children,
@@ -16,23 +17,32 @@ export default function AdminLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
-    // Check if user is logged in and is admin
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const userData = JSON.parse(userStr);
-      if (userData.role === 'admin') {
-        setUser(userData);
+    // Check if user is logged in, session is valid, and user is admin
+    const checkUser = () => {
+      const userData = authService.getUser();
+      if (userData) {
+        if (userData.role === 'admin') {
+          setUser(userData);
+        } else {
+          router.push('/');
+        }
       } else {
-        router.push('/');
+        router.push('/login');
       }
-    } else {
-      router.push('/login');
-    }
+    };
+
+    checkUser();
+
+    // Check session expiration every minute
+    const intervalId = setInterval(checkUser, 60000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
-    router.push('/');
+    authService.logout();
   };
 
   if (!user) {
@@ -42,6 +52,7 @@ export default function AdminLayout({
   const menuItems = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Products', href: '/admin/products', icon: Package },
+    { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
     { name: 'Users', href: '/admin/users', icon: Users },
     { name: 'Comments', href: '/admin/comments', icon: MessageSquare },
   ];

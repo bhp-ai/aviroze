@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import auth_router, products_router, users_router, comments_router, analytics_router
+from app.routes import auth_router, products_router, users_router, comments_router, analytics_router, payments_router, orders_router
 from app.database import engine, Base
 
 # Create database tables
@@ -27,6 +27,8 @@ app.include_router(products_router)
 app.include_router(users_router)
 app.include_router(comments_router)
 app.include_router(analytics_router)
+app.include_router(payments_router)
+app.include_router(orders_router)
 
 @app.get("/")
 async def root():

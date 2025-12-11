@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShoppingBag, Menu, X, Search, User, LogOut } from 'lucide-react';
+import { ShoppingBag, Menu, X, Search, User, LogOut, Package } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
+import { authService } from '@/lib/services/auth';
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -16,16 +17,11 @@ export default function Navbar() {
   const { getCartCount } = useCart();
 
   useEffect(() => {
-    // Check if user is logged in
+    // Check if user is logged in and validate session
     const checkUser = () => {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        try {
-          const userData = JSON.parse(userStr);
-          setUser(userData);
-        } catch (error) {
-          console.error('Error parsing user data:', error);
-        }
+      const userData = authService.getUser();
+      if (userData) {
+        setUser(userData);
       } else {
         setUser(null);
       }
@@ -36,8 +32,12 @@ export default function Navbar() {
     // Listen for login events
     window.addEventListener('userLogin', checkUser);
 
+    // Check session expiration every minute
+    const intervalId = setInterval(checkUser, 60000);
+
     return () => {
       window.removeEventListener('userLogin', checkUser);
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -59,10 +59,9 @@ export default function Navbar() {
   }, [isUserMenuOpen]);
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
+    authService.logout();
     setUser(null);
     setIsUserMenuOpen(false);
-    router.push('/');
   };
 
   return (
@@ -128,6 +127,14 @@ export default function Navbar() {
                           Admin Dashboard
                         </Link>
                       )}
+                      <Link
+                        href="/orders"
+                        className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        <Package className="w-4 h-4" />
+                        <span>My Orders</span>
+                      </Link>
                       <button
                         onClick={handleLogout}
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"

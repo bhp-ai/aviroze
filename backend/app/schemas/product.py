@@ -20,7 +20,7 @@ class ProductBase(BaseModel):
     price: float
     category: str
     stock: int
-    image: Optional[str] = None
+    images: List[str] = []  # Array of base64 image data URLs
     colors: Optional[List[str]] = []
 
 class ProductCreate(ProductBase):
@@ -33,7 +33,7 @@ class ProductUpdate(BaseModel):
     price: Optional[float] = None
     category: Optional[str] = None
     stock: Optional[int] = None
-    image: Optional[str] = None
+    images: Optional[List[str]] = None
     colors: Optional[List[str]] = None
     discount: Optional[DiscountBase] = None
     voucher: Optional[VoucherBase] = None

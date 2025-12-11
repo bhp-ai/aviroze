@@ -5,9 +5,70 @@ import Image from 'next/image';
 import { Trash2, Plus, Minus, Tag } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { formatIDR, calculateDiscountedPrice, getFinalPrice } from '@/lib/utils/currency';
+import { authService } from '@/lib/services/auth';
+import { paymentService } from '@/lib/services/payments';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/contexts/ToastContext';
 
 export default function CartPage() {
   const { items, removeFromCart, updateQuantity, getCartTotal } = useCart();
+  const router = useRouter();
+  const { showToast } = useToast();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
+
+  useEffect(() => {
+    const user = authService.getUser();
+    if (!user) {
+      router.push('/login');
+    } else {
+      setIsAuthenticated(true);
+    }
+    setIsChecking(false);
+  }, [router]);
+
+  if (isChecking) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="text-center">
+          <p className="text-gray-500">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  const handleCheckout = async () => {
+    setIsProcessingCheckout(true);
+    try {
+      // Prepare checkout items with only IDs and quantities (security: prices fetched on backend)
+      const checkoutItems = items.map((item) => ({
+        product_id: item.product.id,
+        quantity: item.quantity,
+        selected_size: item.selectedSize,
+        selected_color: item.selectedColor,
+      }));
+
+      // Create checkout session
+      const { checkout_url } = await paymentService.createCheckoutSession(checkoutItems);
+
+      // Redirect to Stripe checkout
+      window.location.href = checkout_url;
+    } catch (error) {
+      console.error('Checkout error:', error);
+      showToast(
+        error instanceof Error ? error.message : 'Failed to start checkout',
+        'error'
+      );
+      setIsProcessingCheckout(false);
+    }
+  };
+
   const cartItems = items;
   const subtotal = getCartTotal();
   const shipping = subtotal > 0 ? 50000 : 0;
@@ -192,8 +253,12 @@ export default function CartPage() {
               <span>Total</span>
               <span>IDR {formatIDR(total)}</span>
             </div>
-            <button className="w-full bg-black text-white py-3 text-sm font-medium hover:bg-gray-800 transition-colors mb-3">
-              Proceed to Checkout
+            <button
+              onClick={handleCheckout}
+              disabled={isProcessingCheckout}
+              className="w-full bg-black text-white py-3 text-sm font-medium hover:bg-gray-800 transition-colors mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isProcessingCheckout ? 'Processing...' : 'Proceed to Checkout'}
             </button>
             <Link
               href="/products"

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ShoppingBag, Users, DollarSign, TrendingUp, Package, Star } from 'lucide-react';
+import { ShoppingBag, Users, DollarSign, TrendingUp, Package, Star, Clock, CheckCircle } from 'lucide-react';
 import { analyticsService, DashboardStats } from '@/lib/services/analytics';
 
 export default function DashboardPage() {
@@ -52,50 +52,100 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {/* Total Products */}
+        {/* Total Orders */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <div className="p-3 bg-blue-100 rounded-lg">
-              <Package className="w-6 h-6 text-blue-600" />
+              <ShoppingBag className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900">{stats.total_orders}</h3>
+          <p className="text-sm text-gray-600 mt-1">Total Orders</p>
+          <p className="text-xs text-gray-500 mt-2">
+            {stats.recent_orders_count} in last 7 days
+          </p>
+        </div>
+
+        {/* Total Revenue */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-green-100 rounded-lg">
+              <DollarSign className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900">
+            IDR {(stats.total_revenue / 1000).toFixed(0)}K
+          </h3>
+          <p className="text-sm text-gray-600 mt-1">Total Revenue</p>
+          <p className="text-xs text-gray-500 mt-2">From completed orders</p>
+        </div>
+
+        {/* Total Products */}
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-purple-100 rounded-lg">
+              <Package className="w-6 h-6 text-purple-600" />
             </div>
           </div>
           <h3 className="text-2xl font-bold text-gray-900">{stats.total_products}</h3>
           <p className="text-sm text-gray-600 mt-1">Total Products</p>
+          <p className="text-xs text-gray-500 mt-2">
+            {stats.low_stock_products} low stock
+          </p>
         </div>
 
         {/* Total Users */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-green-100 rounded-lg">
-              <Users className="w-6 h-6 text-green-600" />
+            <div className="p-3 bg-orange-100 rounded-lg">
+              <Users className="w-6 h-6 text-orange-600" />
             </div>
           </div>
           <h3 className="text-2xl font-bold text-gray-900">{stats.total_users}</h3>
           <p className="text-sm text-gray-600 mt-1">Total Users</p>
+          <p className="text-xs text-gray-500 mt-2">{stats.total_comments} reviews</p>
         </div>
+      </div>
 
-        {/* Total Comments */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <Star className="w-6 h-6 text-yellow-600" />
+      {/* Order Status Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <Clock className="w-6 h-6 text-yellow-600" />
+            <div>
+              <p className="text-xs text-yellow-600 font-medium">Pending</p>
+              <p className="text-xl font-bold text-yellow-900">{stats.pending_orders}</p>
             </div>
           </div>
-          <h3 className="text-2xl font-bold text-gray-900">{stats.total_comments}</h3>
-          <p className="text-sm text-gray-600 mt-1">Total Comments</p>
         </div>
-
-        {/* Average Rating */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <Package className="w-6 h-6 text-blue-600" />
+            <div>
+              <p className="text-xs text-blue-600 font-medium">Processing</p>
+              <p className="text-xl font-bold text-blue-900">{stats.processing_orders}</p>
             </div>
           </div>
-          <h3 className="text-2xl font-bold text-gray-900">
-            {stats.avg_rating ? Number(stats.avg_rating).toFixed(1) : '0.0'}
-          </h3>
-          <p className="text-sm text-gray-600 mt-1">Average Rating</p>
+        </div>
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <CheckCircle className="w-6 h-6 text-green-600" />
+            <div>
+              <p className="text-xs text-green-600 font-medium">Completed</p>
+              <p className="text-xl font-bold text-green-900">{stats.completed_orders}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <Star className="w-6 h-6 text-red-600" />
+            <div>
+              <p className="text-xs text-red-600 font-medium">Avg Rating</p>
+              <p className="text-xl font-bold text-red-900">
+                {stats.avg_rating ? Number(stats.avg_rating).toFixed(1) : '0.0'}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

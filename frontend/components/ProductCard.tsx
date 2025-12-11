@@ -5,8 +5,8 @@ import Image from 'next/image';
 import { Product as OldProduct } from '@/types';
 import { Product as ApiProduct } from '@/lib/services/products';
 import { useCart } from '@/contexts/CartContext';
+import { useToast } from '@/contexts/ToastContext';
 import { ShoppingCart } from 'lucide-react';
-import { useState } from 'react';
 import { formatIDR, calculateDiscountedPrice } from '@/lib/utils/currency';
 
 interface ProductCardProps {
@@ -21,10 +21,10 @@ function isApiProduct(product: OldProduct | ApiProduct): product is ApiProduct {
 export default function ProductCard({ product }: ProductCardProps) {
   const isApi = isApiProduct(product);
   const { addToCart } = useCart();
-  const [isAdding, setIsAdding] = useState(false);
+  const toast = useToast();
 
   const productImage = isApi
-    ? (product.image || 'https://via.placeholder.com/400x600?text=No+Image')
+    ? (product.images && product.images.length > 0 ? product.images[0] : 'https://via.placeholder.com/400x600?text=No+Image')
     : product.images[0];
 
   const productLink = isApi
@@ -40,13 +40,15 @@ export default function ProductCard({ product }: ProductCardProps) {
     if (!inStock) return;
 
     if (isApi) {
-      setIsAdding(true);
-      addToCart(product, 1);
+      const result = addToCart(product, 1);
 
-      // Show feedback animation
-      setTimeout(() => {
-        setIsAdding(false);
-      }, 1000);
+      if (result === false) {
+        // User not logged in
+        toast.warning('Please login to add items to cart');
+      } else {
+        // Successfully added
+        toast.success('Added to cart!');
+      }
     }
   };
 
@@ -83,14 +85,15 @@ export default function ProductCard({ product }: ProductCardProps) {
 
         {/* Add to Cart Button - Shows on hover */}
         {inStock && isApi && (
-          <button
-            onClick={handleAddToCart}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-white text-gray-900 px-4 py-2 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2 shadow-lg hover:bg-gray-100 z-10"
-            disabled={isAdding}
-          >
-            <ShoppingCart className="w-4 h-4" />
-            {isAdding ? 'Added!' : 'Add to Cart'}
-          </button>
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+            <button
+              onClick={handleAddToCart}
+              className="bg-white text-gray-900 px-4 py-2 text-xs font-medium flex items-center gap-2 shadow-lg hover:bg-gray-100"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              Add to Cart
+            </button>
+          </div>
         )}
       </div>
 

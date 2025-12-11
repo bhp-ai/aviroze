@@ -46,6 +46,8 @@ export const authService = {
   logout() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
+    localStorage.removeItem('user_timestamp');
+    localStorage.removeItem('cart'); // Clear cart on logout
     window.location.href = '/login';
   },
 
@@ -59,11 +61,32 @@ export const authService = {
 
   getUser(): User | null {
     const userStr = localStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
+    const timestampStr = localStorage.getItem('user_timestamp');
+
+    if (!userStr || !timestampStr) {
+      return null;
+    }
+
+    // Check if user session is older than 2 hours (2 hours = 7200000 milliseconds)
+    const timestamp = parseInt(timestampStr);
+    const twoHoursInMs = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+    const now = Date.now();
+
+    if (now - timestamp > twoHoursInMs) {
+      // Session expired, remove user and token
+      localStorage.removeItem('user');
+      localStorage.removeItem('user_timestamp');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('cart'); // Clear cart on session expiration
+      return null;
+    }
+
+    return JSON.parse(userStr);
   },
 
   setUser(user: User) {
     localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('user_timestamp', Date.now().toString());
   },
 
   isAuthenticated(): boolean {

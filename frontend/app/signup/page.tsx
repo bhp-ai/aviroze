@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/lib/services/auth';
 
@@ -13,6 +13,19 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    // Check if user is already logged in
+    const user = authService.getUser();
+    if (user) {
+      // User is already logged in, redirect to appropriate page
+      if (user.role === 'admin') {
+        router.push('/admin/dashboard');
+      } else {
+        router.push('/');
+      }
+    }
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +68,13 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-white">
       <div className="w-full max-w-md">
+        {/* Back to Home Link */}
+        <div className="mb-6 text-center">
+          <Link href="/" className="text-sm text-gray-600 hover:text-gray-900 hover:underline">
+            ← Back to Home
+          </Link>
+        </div>
+
         <div className="text-center mb-8">
           <h1 className="text-3xl font-normal mb-3 text-gray-900">
             Create Account

@@ -15,6 +15,13 @@ export interface DashboardStats {
     avg_rating: number;
     review_count: number;
   }>;
+  total_orders: number;
+  pending_orders: number;
+  processing_orders: number;
+  completed_orders: number;
+  cancelled_orders: number;
+  total_revenue: number;
+  recent_orders_count: number;
 }
 
 export interface TrendingProduct {

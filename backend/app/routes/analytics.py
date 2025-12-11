@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from app.database import get_db
-from app.db_models import User, Product, ProductComment
+from app.db_models import User, Product, ProductComment, Order, OrderStatus
 from app.auth import get_current_admin_user
 from typing import Dict, List
 
@@ -42,7 +42,7 @@ async def get_dashboard_stats(
 
     category_stats = {}
     for category, count in products_by_category:
-        category_name = category.value if hasattr(category, 'value') else str(category)
+        category_name = str(category) if category else "Uncategorized"
         category_stats[category_name] = count
 
     # Recent activity (comments in last 7 days)
@@ -71,6 +71,25 @@ async def get_dashboard_stats(
             "review_count": review_count
         })
 
+    # Order statistics
+    total_orders = db.query(Order).count()
+    pending_orders = db.query(Order).filter(Order.status == OrderStatus.PENDING).count()
+    processing_orders = db.query(Order).filter(Order.status == OrderStatus.PROCESSING).count()
+    completed_orders = db.query(Order).filter(Order.status == OrderStatus.COMPLETED).count()
+    cancelled_orders = db.query(Order).filter(Order.status == OrderStatus.CANCELLED).count()
+
+    # Total revenue from completed orders
+    total_revenue_result = db.query(func.sum(Order.total_amount)).filter(
+        Order.status == OrderStatus.COMPLETED,
+        Order.payment_status == "completed"
+    ).scalar()
+    total_revenue = float(total_revenue_result) if total_revenue_result else 0.0
+
+    # Recent orders (last 7 days)
+    recent_orders_count = db.query(Order).filter(
+        Order.created_at >= seven_days_ago
+    ).count()
+
     return {
         "total_users": total_users,
         "total_admins": total_admins,
@@ -80,7 +99,14 @@ async def get_dashboard_stats(
         "low_stock_products": low_stock_products,
         "products_by_category": category_stats,
         "recent_comments_count": recent_comments_count,
-        "top_rated_products": top_rated_products
+        "top_rated_products": top_rated_products,
+        "total_orders": total_orders,
+        "pending_orders": pending_orders,
+        "processing_orders": processing_orders,
+        "completed_orders": completed_orders,
+        "cancelled_orders": cancelled_orders,
+        "total_revenue": total_revenue,
+        "recent_orders_count": recent_orders_count
     }
 
 @router.get("/products/trending", response_model=List[Dict])
@@ -108,7 +134,7 @@ async def get_trending_products(
 
     trending_products = []
     for product_id, name, category, price, comment_count, avg_rating in trending:
-        category_name = category.value if hasattr(category, 'value') else str(category)
+        category_name = str(category) if category else "Uncategorized"
         trending_products.append({
             "id": product_id,
             "name": name,

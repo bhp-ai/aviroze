@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Product } from '@/lib/services/products';
 import { getFinalPrice } from '@/lib/utils/currency';
+import { authService } from '@/lib/services/auth';
 
 export interface CartItem {
   product: Product;
@@ -13,7 +14,7 @@ export interface CartItem {
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (product: Product, quantity?: number, size?: string, color?: string) => void;
+  addToCart: (product: Product, quantity?: number, size?: string, color?: string) => boolean;
   removeFromCart: (index: number) => void;
   updateQuantity: (index: number, quantity: number) => void;
   clearCart: () => void;
@@ -49,12 +50,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [items, isClient]);
 
-  const addToCart = (product: Product, quantity = 1, size?: string, color?: string) => {
-    setItems((prevItems) => {
-      // Normalize empty strings to undefined for consistent matching
-      const normalizedSize = size || undefined;
-      const normalizedColor = color || undefined;
+  const addToCart = (product: Product, quantity = 1, size?: string, color?: string): boolean => {
+    // Check if user is logged in
+    const user = authService.getUser();
+    if (!user) {
+      // User not logged in
+      return false;
+    }
 
+    // Normalize empty strings to undefined for consistent matching
+    const normalizedSize = size || undefined;
+    const normalizedColor = color || undefined;
+
+    setItems((prevItems) => {
       // Check if product already exists in cart
       const existingItemIndex = prevItems.findIndex(
         (item) =>
@@ -81,6 +89,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         ];
       }
     });
+
+    return true;
   };
 
   const removeFromCart = (index: number) => {

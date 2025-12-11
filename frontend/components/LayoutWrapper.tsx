@@ -5,6 +5,7 @@ import AnnouncementBanner from '@/components/AnnouncementBanner';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { CartProvider } from '@/contexts/CartContext';
+import { ToastProvider } from '@/contexts/ToastContext';
 
 export default function LayoutWrapper({
   children,
@@ -20,17 +21,19 @@ export default function LayoutWrapper({
   const hideNavAndFooter = isAdminRoute || isLoginRoute || isSignupRoute;
 
   return (
-    <CartProvider>
-      {!hideNavAndFooter && (
-        <>
-          <AnnouncementBanner />
-          <Navbar />
-        </>
-      )}
-      <main className={hideNavAndFooter ? '' : 'min-h-screen'}>
-        {children}
-      </main>
-      {!hideNavAndFooter && <Footer />}
-    </CartProvider>
+    <ToastProvider>
+      <CartProvider>
+        {!hideNavAndFooter && (
+          <>
+            <AnnouncementBanner />
+            <Navbar />
+          </>
+        )}
+        <main className={hideNavAndFooter ? '' : 'min-h-screen'}>
+          {children}
+        </main>
+        {!hideNavAndFooter && <Footer />}
+      </CartProvider>
+    </ToastProvider>
   );
 }

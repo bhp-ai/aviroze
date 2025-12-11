@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Text, Boolean, DateTime, ForeignKey, Table, Enum
+from sqlalchemy import Column, Integer, String, Float, Text, Boolean, DateTime, ForeignKey, Table, Enum, LargeBinary
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -56,7 +56,8 @@ class Product(Base):
     price = Column(Float, nullable=False)
     category = Column(String(100), nullable=False, index=True)  # Changed from Enum to String for flexibility
     stock = Column(Integer, default=0, nullable=False)
-    image = Column(String(500), nullable=True)
+    image = Column(LargeBinary, nullable=True)  # Kept for backward compatibility (primary image)
+    image_mimetype = Column(String(50), nullable=True)  # Store MIME type (e.g., image/jpeg, image/png)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -74,6 +75,21 @@ class Product(Base):
 
     # Relationships
     comments = relationship("ProductComment", back_populates="product", cascade="all, delete-orphan")
+    images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan", order_by="ProductImage.display_order")
+
+# Product Image Model
+class ProductImage(Base):
+    __tablename__ = "product_images"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey('products.id', ondelete='CASCADE'), nullable=False)
+    image = Column(LargeBinary, nullable=False)  # Binary image data
+    image_mimetype = Column(String(50), nullable=False)  # Store MIME type
+    display_order = Column(Integer, default=0, nullable=False)  # Order of images
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    product = relationship("Product", back_populates="images")
 
 # Product Comment Model
 class ProductComment(Base):
@@ -106,7 +122,7 @@ class Order(Base):
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     status = Column(Enum(OrderStatus), default=OrderStatus.PENDING, nullable=False, index=True)
     total_amount = Column(Float, nullable=False)
-    payment_method = Column(String(50), nullable=True)
+    payment_method = Column(String(200), nullable=True)  # Increased to 200 to store Stripe session IDs
     payment_status = Column(String(50), default="pending", nullable=False)  # pending, completed, failed
     shipping_address = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)

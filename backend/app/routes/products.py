@@ -1,13 +1,61 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import List, Optional
 from app.database import get_db
-from app.db_models import Product, User, Order, OrderItem, OrderStatus
+from app.db_models import Product, ProductImage, User, Order, OrderItem, OrderStatus
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from app.auth import get_current_user, get_current_admin_user
+import json
+import base64
 
 router = APIRouter(prefix="/api/products", tags=["Products"])
+
+def convert_image_to_data_url(image_binary: bytes, mimetype: str) -> str:
+    """Convert binary image data to base64 data URL"""
+    if not image_binary:
+        return ""
+    base64_image = base64.b64encode(image_binary).decode('utf-8')
+    return f"data:{mimetype};base64,{base64_image}"
+
+def get_product_images(product: Product) -> List[str]:
+    """Get all product images as base64 data URLs"""
+    images = []
+
+    # Add additional images from ProductImage table
+    for img in product.images:
+        images.append(convert_image_to_data_url(img.image, img.image_mimetype))
+
+    # If no images in ProductImage table, use legacy image field
+    if not images and product.image:
+        images.append(convert_image_to_data_url(product.image, product.image_mimetype or "image/jpeg"))
+
+    return images
+
+@router.get("/{product_id}/image")
+async def get_product_image(
+    product_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get product image as binary data"""
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found"
+        )
+
+    if not product.image:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product has no image"
+        )
+
+    return Response(
+        content=product.image,
+        media_type=product.image_mimetype or "image/jpeg"
+    )
 
 @router.get("/", response_model=List[ProductResponse])
 async def get_products(
@@ -34,14 +82,17 @@ async def get_products(
     # Convert to response format
     result = []
     for product in products:
+        # Get all product images
+        images = get_product_images(product)
+
         product_dict = {
             "id": product.id,
             "name": product.name,
             "description": product.description,
             "price": product.price,
-            "category": product.category,  # Now a string, no need to convert
+            "category": product.category,
             "stock": product.stock,
-            "image": product.image,
+            "images": images,
             "colors": [],  # TODO: Add colors from product_colors table
             "created_at": product.created_at,
             "discount": {
@@ -74,14 +125,17 @@ async def get_product(
             detail="Product not found"
         )
 
+    # Get all product images
+    images = get_product_images(product)
+
     product_dict = {
         "id": product.id,
         "name": product.name,
         "description": product.description,
         "price": product.price,
-        "category": product.category,  # Now a string, no need to convert
+        "category": product.category,
         "stock": product.stock,
-        "image": product.image,
+        "images": images,
         "colors": [],
         "created_at": product.created_at,
         "discount": {
@@ -102,38 +156,106 @@ async def get_product(
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(
-    product_data: ProductCreate,
+    name: str = Form(...),
+    description: str = Form(...),
+    price: float = Form(...),
+    category: str = Form(...),
+    stock: int = Form(...),
+    images: List[UploadFile] = File([]),
+    colors: Optional[str] = Form(None),
+    discount: Optional[str] = Form(None),
+    voucher: Optional[str] = Form(None),
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
     """Create a new product (Admin only)"""
+    # Parse JSON fields
+    colors_list = json.loads(colors) if colors else []
+    discount_data = json.loads(discount) if discount else None
+    voucher_data = json.loads(voucher) if voucher else None
+
+    # Handle voucher code - convert empty string to None to avoid unique constraint violation
+    voucher_code = None
+    if voucher_data and voucher_data.get('enabled'):
+        code = voucher_data.get('code')
+        # Convert empty string to None to avoid unique constraint violation
+        voucher_code = code if code and code.strip() else None
+
     new_product = Product(
-        name=product_data.name,
-        description=product_data.description,
-        price=product_data.price,
-        category=product_data.category,
-        stock=product_data.stock,
-        image=product_data.image,
-        discount_enabled=product_data.discount.enabled if product_data.discount else False,
-        discount_type=product_data.discount.type if product_data.discount else None,
-        discount_value=product_data.discount.value if product_data.discount else None,
-        voucher_enabled=product_data.voucher.enabled if product_data.voucher else False,
-        voucher_code=product_data.voucher.code if product_data.voucher else None,
-        voucher_discount_type=product_data.voucher.discount_type if product_data.voucher else None,
-        voucher_discount_value=product_data.voucher.discount_value if product_data.voucher else None,
-        voucher_expiry_date=product_data.voucher.expiry_date if product_data.voucher else None
+        name=name,
+        description=description,
+        price=price,
+        category=category,
+        stock=stock,
+        discount_enabled=discount_data.get('enabled', False) if discount_data else False,
+        discount_type=discount_data.get('type') if discount_data else None,
+        discount_value=discount_data.get('value') if discount_data else None,
+        voucher_enabled=voucher_data.get('enabled', False) if voucher_data else False,
+        voucher_code=voucher_code,
+        voucher_discount_type=voucher_data.get('discount_type') if voucher_data else None,
+        voucher_discount_value=voucher_data.get('discount_value') if voucher_data else None,
+        voucher_expiry_date=voucher_data.get('expiry_date') if voucher_data else None
     )
 
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
 
-    return new_product
+    # Store multiple images
+    for idx, image_file in enumerate(images):
+        if image_file and image_file.filename:
+            image_binary = await image_file.read()
+            product_image = ProductImage(
+                product_id=new_product.id,
+                image=image_binary,
+                image_mimetype=image_file.content_type or "image/jpeg",
+                display_order=idx
+            )
+            db.add(product_image)
+
+    db.commit()
+    db.refresh(new_product)
+
+    # Get all product images
+    images_list = get_product_images(new_product)
+
+    return {
+        "id": new_product.id,
+        "name": new_product.name,
+        "description": new_product.description,
+        "price": new_product.price,
+        "category": new_product.category,
+        "stock": new_product.stock,
+        "images": images_list,
+        "colors": colors_list,
+        "created_at": new_product.created_at,
+        "discount": {
+            "enabled": new_product.discount_enabled,
+            "type": new_product.discount_type,
+            "value": new_product.discount_value
+        } if new_product.discount_enabled else None,
+        "voucher": {
+            "enabled": new_product.voucher_enabled,
+            "code": new_product.voucher_code,
+            "discount_type": new_product.voucher_discount_type,
+            "discount_value": new_product.voucher_discount_value,
+            "expiry_date": new_product.voucher_expiry_date
+        } if new_product.voucher_enabled else None
+    }
 
 @router.put("/{product_id}", response_model=ProductResponse)
 async def update_product(
     product_id: int,
-    product_data: ProductUpdate,
+    name: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    price: Optional[float] = Form(None),
+    category: Optional[str] = Form(None),
+    stock: Optional[int] = Form(None),
+    images: List[UploadFile] = File([]),
+    colors: Optional[str] = Form(None),
+    discount: Optional[str] = Form(None),
+    voucher: Optional[str] = Form(None),
+    replace_images: bool = Form(False),  # If true, replace all images; if false, add to existing
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
@@ -146,35 +268,90 @@ async def update_product(
         )
 
     # Update fields
-    if product_data.name is not None:
-        product.name = product_data.name
-    if product_data.description is not None:
-        product.description = product_data.description
-    if product_data.price is not None:
-        product.price = product_data.price
-    if product_data.category is not None:
-        product.category = product_data.category
-    if product_data.stock is not None:
-        product.stock = product_data.stock
-    if product_data.image is not None:
-        product.image = product_data.image
+    if name is not None:
+        product.name = name
+    if description is not None:
+        product.description = description
+    if price is not None:
+        product.price = price
+    if category is not None:
+        product.category = category
+    if stock is not None:
+        product.stock = stock
 
-    if product_data.discount:
-        product.discount_enabled = product_data.discount.enabled
-        product.discount_type = product_data.discount.type
-        product.discount_value = product_data.discount.value
+    # Parse and update discount
+    if discount:
+        discount_data = json.loads(discount)
+        product.discount_enabled = discount_data.get('enabled', False)
+        product.discount_type = discount_data.get('type')
+        product.discount_value = discount_data.get('value')
 
-    if product_data.voucher:
-        product.voucher_enabled = product_data.voucher.enabled
-        product.voucher_code = product_data.voucher.code
-        product.voucher_discount_type = product_data.voucher.discount_type
-        product.voucher_discount_value = product_data.voucher.discount_value
-        product.voucher_expiry_date = product_data.voucher.expiry_date
+    # Parse and update voucher
+    if voucher:
+        voucher_data = json.loads(voucher)
+        product.voucher_enabled = voucher_data.get('enabled', False)
+        # Convert empty string to None to avoid unique constraint violation
+        code = voucher_data.get('code')
+        product.voucher_code = code if code and code.strip() else None
+        product.voucher_discount_type = voucher_data.get('discount_type')
+        product.voucher_discount_value = voucher_data.get('discount_value')
+        product.voucher_expiry_date = voucher_data.get('expiry_date')
+
+    # Parse and update colors if provided
+    colors_list = []
+    if colors:
+        colors_list = json.loads(colors)
+
+    # Handle images update
+    if images and len(images) > 0 and images[0].filename:
+        if replace_images:
+            # Delete existing images
+            db.query(ProductImage).filter(ProductImage.product_id == product_id).delete()
+
+        # Get current max display_order
+        max_order = db.query(func.max(ProductImage.display_order)).filter(ProductImage.product_id == product_id).scalar() or -1
+
+        # Add new images
+        for idx, image_file in enumerate(images):
+            if image_file and image_file.filename:
+                image_binary = await image_file.read()
+                product_image = ProductImage(
+                    product_id=product_id,
+                    image=image_binary,
+                    image_mimetype=image_file.content_type or "image/jpeg",
+                    display_order=max_order + idx + 1
+                )
+                db.add(product_image)
 
     db.commit()
     db.refresh(product)
 
-    return product
+    # Get all product images
+    images_list = get_product_images(product)
+
+    return {
+        "id": product.id,
+        "name": product.name,
+        "description": product.description,
+        "price": product.price,
+        "category": product.category,
+        "stock": product.stock,
+        "images": images_list,
+        "colors": colors_list,
+        "created_at": product.created_at,
+        "discount": {
+            "enabled": product.discount_enabled,
+            "type": product.discount_type,
+            "value": product.discount_value
+        } if product.discount_enabled else None,
+        "voucher": {
+            "enabled": product.voucher_enabled,
+            "code": product.voucher_code,
+            "discount_type": product.voucher_discount_type,
+            "discount_value": product.voucher_discount_value,
+            "expiry_date": product.voucher_expiry_date
+        } if product.voucher_enabled else None
+    }
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(
@@ -234,6 +411,9 @@ async def get_bestsellers(
     # Convert to response format
     result = []
     for product, total_sold in bestsellers:
+        # Get all product images
+        images = get_product_images(product)
+
         product_dict = {
             "id": product.id,
             "name": product.name,
@@ -241,7 +421,7 @@ async def get_bestsellers(
             "price": product.price,
             "category": product.category,
             "stock": product.stock,
-            "image": product.image,
+            "images": images,
             "colors": [],
             "created_at": product.created_at,
             "discount": {
@@ -272,14 +452,17 @@ async def get_new_arrivals(
     # Convert to response format
     result = []
     for product in products:
+        # Get all product images
+        images = get_product_images(product)
+
         product_dict = {
             "id": product.id,
             "name": product.name,
             "description": product.description,
             "price": product.price,
-            "category": product.category,  # Now a string, no need to convert
+            "category": product.category,
             "stock": product.stock,
-            "image": product.image,
+            "images": images,
             "colors": [],
             "created_at": product.created_at,
             "discount": {
