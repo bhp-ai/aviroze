@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import List, Optional
 from app.database import get_db
-from app.db_models import Product, ProductImage, User, Order, OrderItem, OrderStatus
+from app.db_models import Product, ProductImage, User, Order, OrderItem, OrderStatus, UserActivityType
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from app.auth import get_current_user, get_current_admin_user
+from app.logging_helper import log_user_activity
 import json
 import base64
 
@@ -115,6 +116,7 @@ async def get_products(
 @router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(
     product_id: int,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get a single product by ID"""
@@ -124,6 +126,42 @@ async def get_product(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product not found"
         )
+
+    # Log product view activity (works for authenticated and anonymous users)
+    user_id = None
+    try:
+        # Try to extract user from authorization header
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+            from app.auth import jwt, SECRET_KEY, ALGORITHM
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                email = payload.get("sub")
+                if email:
+                    user = db.query(User).filter(User.email == email).first()
+                    if user:
+                        user_id = user.id
+            except:
+                pass
+    except:
+        pass
+
+    # Log the product view
+    try:
+        log_user_activity(
+            db=db,
+            activity_type=UserActivityType.PRODUCT_VIEW,
+            user_id=user_id,
+            resource_type="product",
+            resource_id=product.id,
+            description=f"{'User' if user_id else 'Anonymous'} viewed product: {product.name}",
+            details={"product_name": product.name, "category": product.category},
+            request=request
+        )
+    except Exception as e:
+        print(f"Failed to log product view: {e}")
+        pass  # Don't fail if logging fails
 
     # Get all product images
     images = get_product_images(product)

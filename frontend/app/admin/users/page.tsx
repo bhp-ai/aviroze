@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, UserPlus, Edit, Trash2, Download } from 'lucide-react';
-import { usersService } from '@/lib/services/users';
-import { User } from '@/lib/services/auth';
+import { Search, UserPlus, Edit, Trash2, Download, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { usersService, UserCreate, UserUpdate } from '@/lib/services/users';
+import { User, authService } from '@/lib/services/auth';
 import { exportToCSV, formatDateForCSV } from '@/lib/utils/csv-export';
 
 export default function UsersPage() {
@@ -12,9 +12,27 @@ export default function UsersPage() {
   const [activeTab, setActiveTab] = useState<'admin' | 'user'>('admin');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [usersPerPage, setUsersPerPage] = useState(10);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    role: 'user',
+    status: 'active'
+  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const isSystemAdmin = currentUser?.email === 'admin@admin.com';
 
   useEffect(() => {
     fetchUsers();
+    // Get current user from localStorage
+    const user = authService.getUser();
+    setCurrentUser(user);
   }, []);
 
   const fetchUsers = async () => {
@@ -40,9 +58,25 @@ export default function UsersPage() {
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [usersPerPage, searchTerm, activeTab]);
+
   // Filter users by search term and separate by role
   const adminUsers = users.filter(user => user.role === 'admin');
   const regularUsers = users.filter(user => user.role === 'user');
+
+  // Pagination calculations
+  const displayUsers = activeTab === 'admin' ? adminUsers : regularUsers;
+  const indexOfLastUser = currentPage * usersPerPage;
+  const indexOfFirstUser = indexOfLastUser - usersPerPage;
+  const currentUsers = displayUsers.slice(indexOfFirstUser, indexOfLastUser);
+  const totalPages = Math.ceil(displayUsers.length / usersPerPage);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleExportCSV = () => {
     const usersToExport = activeTab === 'admin' ? adminUsers : regularUsers;
@@ -69,8 +103,94 @@ export default function UsersPage() {
     exportToCSV(csvData, columns, filename);
   };
 
+  const handleCreateUser = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const userData: UserCreate = {
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+      };
+      await usersService.create(userData);
+      setShowCreateModal(false);
+      setFormData({ username: '', email: '', password: '', role: 'user', status: 'active' });
+      await fetchUsers();
+    } catch (err: any) {
+      console.error('Failed to create user:', err);
+      setError(err.response?.data?.detail || 'Failed to create user');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateUser = async () => {
+    if (!selectedUser) return;
+    try {
+      setLoading(true);
+      setError('');
+      const userData: UserUpdate = {
+        username: formData.username || undefined,
+        email: formData.email || undefined,
+        // Only include role if user is system admin
+        role: isSystemAdmin ? (formData.role || undefined) : undefined,
+        status: formData.status || undefined,
+      };
+      await usersService.update(selectedUser.id, userData);
+      setShowEditModal(false);
+      setSelectedUser(null);
+      setFormData({ username: '', email: '', password: '', role: 'user', status: 'active' });
+      await fetchUsers();
+    } catch (err: any) {
+      console.error('Failed to update user:', err);
+      setError(err.response?.data?.detail || 'Failed to update user');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+    try {
+      setLoading(true);
+      setError('');
+      await usersService.delete(selectedUser.id);
+      setShowDeleteModal(false);
+      setSelectedUser(null);
+      await fetchUsers();
+    } catch (err: any) {
+      console.error('Failed to delete user:', err);
+      setError(err.response?.data?.detail || 'Failed to delete user');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openCreateModal = () => {
+    setFormData({ username: '', email: '', password: '', role: 'user', status: 'active' });
+    setShowCreateModal(true);
+  };
+
+  const openEditModal = (user: User) => {
+    setSelectedUser(user);
+    setFormData({
+      username: user.username,
+      email: user.email,
+      password: '',
+      role: user.role,
+      status: user.status,
+    });
+    setShowEditModal(true);
+  };
+
+  const openDeleteModal = (user: User) => {
+    setSelectedUser(user);
+    setShowDeleteModal(true);
+  };
+
   // Reusable table component
-  const UserTable = ({ users, emptyMessage }: { users: any[], emptyMessage: string }) => (
+  const UserTable = ({ emptyMessage }: { emptyMessage: string }) => (
     <div>
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
@@ -95,54 +215,82 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {users.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{user.username}</div>
-                      <div className="text-sm text-gray-500">{user.email}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        user.role === 'admin'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}
-                    >
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        user.status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(user.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-900 mr-4">
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button className="text-red-600 hover:text-red-900">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {currentUsers.map((user) => {
+                const isProtectedUser = user.email === 'admin@admin.com' || user.email === 'user@user.com';
+                return (
+                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">{user.username}</span>
+                          {isProtectedUser && (
+                            <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded bg-yellow-100 text-yellow-800">
+                              System
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-500">{user.email}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          user.role === 'admin'
+                            ? 'bg-purple-100 text-purple-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          user.status === 'active'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {user.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(user.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={() => openEditModal(user)}
+                        disabled={isProtectedUser}
+                        className={`mr-4 ${
+                          isProtectedUser
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-blue-600 hover:text-blue-900'
+                        }`}
+                        title={isProtectedUser ? 'System users cannot be modified' : 'Edit user'}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => openDeleteModal(user)}
+                        disabled={isProtectedUser}
+                        className={
+                          isProtectedUser
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-red-600 hover:text-red-900'
+                        }
+                        title={isProtectedUser ? 'System users cannot be deleted' : 'Delete user'}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
-        {!loading && users.length === 0 && (
+        {!loading && currentUsers.length === 0 && (
           <div className="text-center py-12">
             <p className="text-gray-500">{emptyMessage}</p>
           </div>
@@ -154,12 +302,34 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Table Info */}
-      <div className="mt-4 flex items-center justify-between">
-        <p className="text-sm text-gray-600">
-          Showing {users.length} {users.length === 1 ? 'user' : 'users'}
-        </p>
-      </div>
+      {/* Pagination */}
+      {displayUsers.length > 0 && (
+        <div className="mt-6">
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </button>
+
+            <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700">
+              Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, displayUsers.length)} of {displayUsers.length} users
+            </div>
+
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -184,6 +354,22 @@ export default function UsersPage() {
           />
         </div>
 
+        {/* Per Page Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600 whitespace-nowrap">Per page:</span>
+          <select
+            value={usersPerPage}
+            onChange={(e) => setUsersPerPage(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
+
         {/* Export CSV Button */}
         <button
           onClick={handleExportCSV}
@@ -195,7 +381,10 @@ export default function UsersPage() {
         </button>
 
         {/* Add User Button */}
-        <button className="inline-flex items-center gap-2 bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-800 transition-colors">
+        <button
+          onClick={openCreateModal}
+          className="inline-flex items-center gap-2 bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+        >
           <UserPlus className="w-5 h-5" />
           <span>Add User</span>
         </button>
@@ -236,14 +425,258 @@ export default function UsersPage() {
       {/* Table based on active tab */}
       {activeTab === 'admin' ? (
         <UserTable
-          users={adminUsers}
           emptyMessage="No admin users found"
         />
       ) : (
         <UserTable
-          users={regularUsers}
           emptyMessage="No regular users found"
         />
+      )}
+
+      {/* Create User Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Create New User</h2>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                  placeholder="Enter username"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                  placeholder="Enter email"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                  placeholder="Enter password"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  disabled={!isSystemAdmin}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  title={!isSystemAdmin ? 'Only system admin can assign roles' : ''}
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+                {!isSystemAdmin && (
+                  <p className="mt-1 text-xs text-gray-500">Only system admin can assign roles</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateUser}
+                disabled={loading || !formData.username || !formData.email || !formData.password}
+                className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Creating...' : 'Create User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Edit User</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                  placeholder="Enter username"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                  placeholder="Enter email"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  disabled={!isSystemAdmin}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  title={!isSystemAdmin ? 'Only system admin can change roles' : ''}
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+                {!isSystemAdmin && (
+                  <p className="mt-1 text-xs text-gray-500">Only system admin can change roles</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Status
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateUser}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Updating...' : 'Update User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Delete User</h2>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">
+                {error}
+              </div>
+            )}
+
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete the user <strong>{selectedUser.username}</strong> ({selectedUser.email})?
+              This action cannot be undone.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Deleting...' : 'Delete User'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

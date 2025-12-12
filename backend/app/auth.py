@@ -84,9 +84,12 @@ def get_current_admin_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """Ensure current user is an admin"""
-    if current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
-    return current_user
+    from app.db_models import UserRole
+    # Check if role matches admin - handle both enum and string
+    if current_user.role == UserRole.ADMIN or str(current_user.role) == "admin" or (hasattr(current_user.role, 'value') and current_user.role.value == "admin"):
+        return current_user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Not enough permissions. Admin access required."
+    )

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, Trash2, Star } from 'lucide-react';
+import { Search, Trash2, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import { commentsService, CommentWithProduct } from '@/lib/services/comments';
 
 export default function CommentsPage() {
@@ -10,6 +10,8 @@ export default function CommentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [commentsPerPage, setCommentsPerPage] = useState(10);
 
   useEffect(() => {
     fetchComments();
@@ -43,6 +45,21 @@ export default function CommentsPage() {
       setFilteredComments(comments);
     }
   }, [searchTerm, comments]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [commentsPerPage, searchTerm]);
+
+  // Pagination calculations
+  const indexOfLastComment = currentPage * commentsPerPage;
+  const indexOfFirstComment = indexOfLastComment - commentsPerPage;
+  const currentComments = filteredComments.slice(indexOfFirstComment, indexOfLastComment);
+  const totalPages = Math.ceil(filteredComments.length / commentsPerPage);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this comment?')) return;
@@ -80,8 +97,8 @@ export default function CommentsPage() {
       </div>
 
       {/* Search Bar */}
-      <div className="mb-6">
-        <div className="relative">
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
@@ -90,6 +107,22 @@ export default function CommentsPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 transition-colors"
           />
+        </div>
+
+        {/* Per Page Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600 whitespace-nowrap">Per page:</span>
+          <select
+            value={commentsPerPage}
+            onChange={(e) => setCommentsPerPage(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
         </div>
       </div>
 
@@ -126,7 +159,7 @@ export default function CommentsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredComments.map((comment) => (
+              {currentComments.map((comment) => (
                 <tr key={comment.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
@@ -163,7 +196,7 @@ export default function CommentsPage() {
           </table>
         </div>
 
-        {!loading && filteredComments.length === 0 && (
+        {!loading && currentComments.length === 0 && (
           <div className="text-center py-12">
             <p className="text-gray-500">
               {searchTerm ? 'No comments found matching your search' : 'No comments yet'}
@@ -177,12 +210,34 @@ export default function CommentsPage() {
         )}
       </div>
 
-      {/* Table Info */}
-      <div className="mt-4 flex items-center justify-between">
-        <p className="text-sm text-gray-600">
-          Showing {filteredComments.length} {filteredComments.length === 1 ? 'comment' : 'comments'}
-        </p>
-      </div>
+      {/* Pagination */}
+      {filteredComments.length > 0 && (
+        <div className="mt-6">
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </button>
+
+            <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700">
+              Showing {indexOfFirstComment + 1} to {Math.min(indexOfLastComment, filteredComments.length)} of {filteredComments.length} comments
+            </div>
+
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

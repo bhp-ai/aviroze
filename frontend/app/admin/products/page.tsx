@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, Plus, Edit, Trash2, X, Tag, Ticket, Package, Download } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, Tag, Ticket, Package, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { productsService, Product as APIProduct } from '@/lib/services/products';
 import { formatIDR } from '@/lib/utils/currency';
 import { exportToCSV, formatDateForCSV, formatCurrencyForCSV } from '@/lib/utils/csv-export';
@@ -41,6 +41,8 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [productsPerPage, setProductsPerPage] = useState(10);
   const [formData, setFormData] = useState<Product>({
     id: 0,
     name: '',
@@ -103,6 +105,21 @@ export default function ProductsPage() {
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [productsPerPage, searchTerm]);
+
+  // Pagination calculations
+  const indexOfLastProduct = currentPage * productsPerPage;
+  const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
+  const currentProducts = products.slice(indexOfFirstProduct, indexOfLastProduct);
+  const totalPages = Math.ceil(products.length / productsPerPage);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleOpenModal = (product?: Product) => {
     if (product) {
@@ -299,6 +316,22 @@ export default function ProductsPage() {
           />
         </div>
 
+        {/* Per Page Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600 whitespace-nowrap">Per page:</span>
+          <select
+            value={productsPerPage}
+            onChange={(e) => setProductsPerPage(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
+
         {/* Export CSV Button */}
         <button
           onClick={handleExportCSV}
@@ -352,7 +385,7 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {products.map((product) => (
+              {currentProducts.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -479,12 +512,34 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Pagination Info */}
-      <div className="mt-4 flex items-center justify-between">
-        <p className="text-sm text-gray-600">
-          Showing {products.length} product{products.length !== 1 ? 's' : ''}
-        </p>
-      </div>
+      {/* Pagination */}
+      {products.length > 0 && (
+        <div className="mt-6">
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </button>
+
+            <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700">
+              Showing {indexOfFirstProduct + 1} to {Math.min(indexOfLastProduct, products.length)} of {products.length} products
+            </div>
+
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Product Modal */}
       {isModalOpen && (

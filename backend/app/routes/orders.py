@@ -1,11 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 from app.database import get_db
-from app.db_models import Order, OrderItem, Product, User, OrderStatus
+from app.db_models import Order, OrderItem, Product, User, OrderStatus, LogAction, UserActivityType
 from app.auth import get_current_user, get_current_admin_user
+from app.services.email_service import email_service
+from app.services.pdf_service import pdf_service
+from app.logging_helper import log_order_event, log_user_activity
 import stripe
 import os
 from dotenv import load_dotenv
@@ -121,6 +125,30 @@ async def stripe_webhook(
                     product.stock = max(0, product.stock - item['quantity'])
 
             db.commit()
+
+            # Log order creation
+            log_order_event(
+                db=db,
+                order_id=new_order.id,
+                action=LogAction.CREATED,
+                user_id=int(user_id),
+                order_status=new_order.status.value,
+                payment_status=new_order.payment_status,
+                payment_method=new_order.payment_method,
+                total_amount=new_order.total_amount,
+                description=f"Order created via Stripe payment"
+            )
+
+            # Log user activity
+            log_user_activity(
+                db=db,
+                activity_type=UserActivityType.CHECKOUT_COMPLETE,
+                user_id=int(user_id),
+                resource_type="order",
+                resource_id=new_order.id,
+                description=f"Completed checkout for order #{new_order.id}",
+                details={"total_amount": total_amount, "payment_method": "stripe"}
+            )
 
     return {"status": "success"}
 
@@ -298,7 +326,9 @@ async def update_order_status(
     db: Session = Depends(get_db)
 ):
     """Update order status (Admin only)"""
-    order = db.query(Order).filter(Order.id == order_id).first()
+    order = db.query(Order).filter(Order.id == order_id).options(
+        joinedload(Order.items)
+    ).first()
 
     if not order:
         raise HTTPException(
@@ -306,7 +336,104 @@ async def update_order_status(
             detail="Order not found"
         )
 
+    # Get the user who owns this order
+    user = db.query(User).filter(User.id == order.user_id).first()
+
+    # Update order status
     order.status = status_update.status
     db.commit()
 
+    # Send status update email
+    if user:
+        try:
+            # Prepare order items data for email
+            order_items_data = []
+            subtotal = 0
+            for item in order.items:
+                product = db.query(Product).filter(Product.id == item.product_id).first()
+                if product:
+                    order_items_data.append({
+                        "product_name": product.name,
+                        "quantity": item.quantity,
+                        "price": item.price
+                    })
+                    subtotal += item.price * item.quantity
+
+            email_data = {
+                "order_id": order.id,
+                "customer_name": user.username,
+                "customer_email": user.email,
+                "order_date": order.created_at.strftime("%B %d, %Y"),
+                "items": order_items_data,
+                "subtotal": subtotal,
+                "shipping": 50000,  # Standard shipping cost
+                "total": order.total_amount,
+                "tracking_number": order.notes if order.notes else ""  # Can store tracking in notes
+            }
+
+            email_service.send_status_update_email(email_data, status_update.status.value)
+            print(f"[EMAIL] Status update email sent to {user.email} for order #{order.id} - Status: {status_update.status.value}")
+        except Exception as email_error:
+            print(f"[WARNING] Failed to send status update email: {str(email_error)}")
+            # Don't fail the status update if email fails
+
     return {"message": "Order status updated successfully", "status": status_update.status.value}
+
+# Download order receipt as PDF
+@router.get("/{order_id}/receipt/pdf")
+async def download_order_receipt_pdf(
+    order_id: int,
+    db: Session = Depends(get_db)
+):
+    """Download order receipt as PDF (accessible by anyone with the link)"""
+    order = db.query(Order).filter(Order.id == order_id).options(
+        joinedload(Order.items)
+    ).first()
+
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found"
+        )
+
+    # Get user info
+    user = db.query(User).filter(User.id == order.user_id).first()
+
+    # Prepare order items data
+    order_items_data = []
+    subtotal = 0
+    for item in order.items:
+        product = db.query(Product).filter(Product.id == item.product_id).first()
+        if product:
+            order_items_data.append({
+                "product_name": product.name,
+                "quantity": item.quantity,
+                "price": item.price
+            })
+            subtotal += item.price * item.quantity
+
+    # Prepare PDF data
+    pdf_data = {
+        "order_id": order.id,
+        "customer_name": user.username if user else "Customer",
+        "customer_email": user.email if user else "",
+        "order_date": order.created_at.strftime("%B %d, %Y"),
+        "items": order_items_data,
+        "subtotal": subtotal,
+        "shipping": 50000,
+        "total": order.total_amount,
+        "shipping_address": order.shipping_address if order.shipping_address else "N/A",
+        "payment_method": "Stripe (Credit Card)" if "stripe" in (order.payment_method or "").lower() else "Credit Card"
+    }
+
+    # Generate PDF
+    pdf_buffer = pdf_service.generate_receipt(pdf_data)
+
+    # Return as downloadable file
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=aviroze_receipt_{order.id}.pdf"
+        }
+    )

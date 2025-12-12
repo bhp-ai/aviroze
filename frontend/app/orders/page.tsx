@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Package, Truck, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react';
+import { Package, Truck, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft } from 'lucide-react';
 import { ordersService, Order } from '@/lib/services/orders';
 import { authService } from '@/lib/services/auth';
 import { formatIDR } from '@/lib/utils/currency';
@@ -16,6 +16,8 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [ordersPerPage, setOrdersPerPage] = useState(5);
 
   useEffect(() => {
     const user = authService.getUser();
@@ -26,6 +28,10 @@ export default function OrdersPage() {
     setIsAuthenticated(true);
     loadOrders();
   }, [router]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [ordersPerPage]);
 
   const loadOrders = async () => {
     try {
@@ -73,6 +79,17 @@ export default function OrdersPage() {
     }
   };
 
+  // Pagination calculations
+  const indexOfLastOrder = currentPage * ordersPerPage;
+  const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+  const currentOrders = orders.slice(indexOfFirstOrder, indexOfLastOrder);
+  const totalPages = Math.ceil(orders.length / ordersPerPage);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   if (!isAuthenticated) {
     return null;
   }
@@ -109,10 +126,26 @@ export default function OrdersPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">My Orders</h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">My Orders</h1>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600 whitespace-nowrap">Per page:</span>
+          <select
+            value={ordersPerPage}
+            onChange={(e) => setOrdersPerPage(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </div>
+      </div>
 
       <div className="space-y-6">
-        {orders.map((order) => (
+        {currentOrders.map((order) => (
           <div key={order.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
             {/* Order Header */}
             <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
@@ -195,6 +228,34 @@ export default function OrdersPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Pagination */}
+      <div className="mt-8">
+        {/* Pagination Buttons */}
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Previous
+          </button>
+
+          <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700">
+            Showing {indexOfFirstOrder + 1} to {Math.min(indexOfLastOrder, orders.length)} of {orders.length} orders
+          </div>
+
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+          >
+            Next
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

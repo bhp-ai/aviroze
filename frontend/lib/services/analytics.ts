@@ -33,6 +33,26 @@ export interface TrendingProduct {
   avg_rating: number;
 }
 
+export interface SalesData {
+  date: string;
+  sales: number;
+  revenue: number;
+  orders: number;
+}
+
+export interface MonthlySales {
+  month: string;
+  sales: number;
+  revenue: number;
+  orders: number;
+}
+
+export interface CategorySales {
+  category: string;
+  sales: number;
+  revenue: number;
+}
+
 export const analyticsService = {
   async getDashboardStats(): Promise<DashboardStats> {
     const response = await apiClient.get<DashboardStats>('/api/analytics/dashboard');
@@ -41,6 +61,22 @@ export const analyticsService = {
 
   async getTrendingProducts(): Promise<TrendingProduct[]> {
     const response = await apiClient.get<TrendingProduct[]>('/api/analytics/products/trending');
+    return response.data;
+  },
+
+  async getSalesData(period: 'week' | 'month' | 'year' = 'month'): Promise<SalesData[]> {
+    const response = await apiClient.get<SalesData[]>(`/api/analytics/sales?period=${period}`);
+    return response.data;
+  },
+
+  async getMonthlySales(year?: number): Promise<MonthlySales[]> {
+    const currentYear = year || new Date().getFullYear();
+    const response = await apiClient.get<MonthlySales[]>(`/api/analytics/sales/monthly?year=${currentYear}`);
+    return response.data;
+  },
+
+  async getCategorySales(): Promise<CategorySales[]> {
+    const response = await apiClient.get<CategorySales[]>('/api/analytics/sales/by-category');
     return response.data;
   },
 };

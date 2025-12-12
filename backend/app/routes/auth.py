@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.db_models import User, UserRole
+from app.db_models import User, UserRole, UserActivityType
 from app.schemas.auth import Token, LoginRequest, RegisterRequest
 from app.schemas.user import UserResponse
 from app.auth import (
@@ -10,12 +10,14 @@ from app.auth import (
     create_access_token,
     get_current_user
 )
+from app.logging_helper import log_user_activity
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: RegisterRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Register a new user"""
@@ -44,11 +46,21 @@ async def register(
     db.commit()
     db.refresh(new_user)
 
+    # Log user registration
+    log_user_activity(
+        db=db,
+        activity_type=UserActivityType.REGISTER,
+        user_id=new_user.id,
+        description=f"User {new_user.username} registered",
+        request=request
+    )
+
     return new_user
 
 @router.post("/login", response_model=Token)
 async def login(
     login_data: LoginRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Login and get access token"""
@@ -71,6 +83,15 @@ async def login(
 
     # Create access token
     access_token = create_access_token(data={"sub": user.email})
+
+    # Log user login
+    log_user_activity(
+        db=db,
+        activity_type=UserActivityType.LOGIN,
+        user_id=user.id,
+        description=f"User {user.username} logged in",
+        request=request
+    )
 
     return {
         "access_token": access_token,

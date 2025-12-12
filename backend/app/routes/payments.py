@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.db_models import Product, User
 from app.auth import get_current_user
+from app.services.email_service import email_service
 import stripe
 import os
 from dotenv import load_dotenv
@@ -279,6 +280,38 @@ async def get_session_status(
 
                     db.commit()
                     print(f"[DEBUG] Order committed successfully!")
+
+                    # Send receipt email
+                    try:
+                        # Prepare order data for email
+                        order_items_data = []
+                        for item in cart_items:
+                            product = db.query(Product).filter(Product.id == item['product_id']).first()
+                            if product:
+                                order_items_data.append({
+                                    "product_name": product.name,
+                                    "quantity": item['quantity'],
+                                    "price": item['price']
+                                })
+
+                        email_data = {
+                            "order_id": new_order.id,
+                            "customer_name": current_user.username,
+                            "customer_email": current_user.email,
+                            "order_date": new_order.created_at.strftime("%B %d, %Y"),
+                            "items": order_items_data,
+                            "subtotal": items_total,
+                            "shipping": shipping_cost,
+                            "total": total_amount,
+                            "shipping_address": shipping_address,
+                            "payment_method": "Stripe (Credit Card)"
+                        }
+
+                        email_service.send_order_receipt(email_data)
+                        print(f"[DEBUG] Receipt email sent to {current_user.email}")
+                    except Exception as email_error:
+                        print(f"[WARNING] Failed to send receipt email: {str(email_error)}")
+                        # Don't fail the order if email fails
                 else:
                     print(f"[DEBUG] No cart data found in session metadata")
 

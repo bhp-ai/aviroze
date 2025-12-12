@@ -1,27 +1,54 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ShoppingBag, Users, DollarSign, TrendingUp, Package, Star, Clock, CheckCircle } from 'lucide-react';
-import { analyticsService, DashboardStats } from '@/lib/services/analytics';
+import { ShoppingBag, Users, DollarSign, TrendingUp, Package, Star, Clock, CheckCircle, Calendar } from 'lucide-react';
+import { analyticsService, DashboardStats, SalesData, MonthlySales, CategorySales } from '@/lib/services/analytics';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
+
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [salesData, setSalesData] = useState<SalesData[]>([]);
+  const [monthlySales, setMonthlySales] = useState<MonthlySales[]>([]);
+  const [categorySales, setCategorySales] = useState<CategorySales[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'year'>('month');
 
   useEffect(() => {
-    fetchStats();
-  }, []);
+    fetchAllData();
+  }, [selectedPeriod]);
 
-  const fetchStats = async () => {
+  const fetchAllData = async () => {
     try {
       setLoading(true);
       setError('');
-      const data = await analyticsService.getDashboardStats();
-      setStats(data);
+
+      // Fetch dashboard stats first
+      const statsData = await analyticsService.getDashboardStats();
+      setStats(statsData);
+
+      // Then fetch chart data (with fallbacks)
+      try {
+        const [sales, monthly, category] = await Promise.all([
+          analyticsService.getSalesData(selectedPeriod).catch(() => []),
+          analyticsService.getMonthlySales().catch(() => []),
+          analyticsService.getCategorySales().catch(() => []),
+        ]);
+        setSalesData(sales);
+        setMonthlySales(monthly);
+        setCategorySales(category);
+      } catch (chartErr) {
+        console.warn('Failed to fetch chart data:', chartErr);
+        // Continue with empty chart data
+        setSalesData([]);
+        setMonthlySales([]);
+        setCategorySales([]);
+      }
     } catch (err: any) {
-      console.error('Failed to fetch dashboard stats:', err);
-      setError('Failed to load dashboard statistics');
+      console.error('Failed to fetch dashboard data:', err);
+      setError(err.response?.data?.detail || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
@@ -147,6 +174,137 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Sales Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Revenue & Sales Trend */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-bold text-gray-900">Revenue & Sales Trend</h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSelectedPeriod('week')}
+                className={`px-3 py-1 text-xs font-medium rounded ${
+                  selectedPeriod === 'week' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                Week
+              </button>
+              <button
+                onClick={() => setSelectedPeriod('month')}
+                className={`px-3 py-1 text-xs font-medium rounded ${
+                  selectedPeriod === 'month' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                Month
+              </button>
+              <button
+                onClick={() => setSelectedPeriod('year')}
+                className={`px-3 py-1 text-xs font-medium rounded ${
+                  selectedPeriod === 'year' ? 'bg-black text-white' : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                Year
+              </button>
+            </div>
+          </div>
+          {salesData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={salesData}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" stroke="#6b7280" style={{ fontSize: '12px' }} />
+                <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                  formatter={(value: any) => `IDR ${value.toLocaleString()}`}
+                />
+                <Legend />
+                <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fillOpacity={1} fill="url(#colorRevenue)" name="Revenue" />
+                <Area type="monotone" dataKey="sales" stroke="#10b981" fillOpacity={1} fill="url(#colorSales)" name="Sales" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-500 text-sm">
+              No sales data available for this period
+            </div>
+          )}
+        </div>
+
+        {/* Sales by Category */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-6">Sales by Category</h2>
+          {categorySales.length > 0 && categorySales[0].category !== "No Data" ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={categorySales}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="sales"
+                >
+                  {categorySales.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value: any) => `IDR ${value.toLocaleString()}`} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-500 text-sm">
+              No category sales data available
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Monthly Sales & Orders */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold text-gray-900">Monthly Sales & Orders</h2>
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <Calendar className="w-4 h-4" />
+            <span>{new Date().getFullYear()}</span>
+          </div>
+        </div>
+        {monthlySales.length > 0 ? (
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={monthlySales}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="month" stroke="#6b7280" style={{ fontSize: '12px' }} />
+              <YAxis yAxisId="left" stroke="#6b7280" style={{ fontSize: '12px' }} />
+              <YAxis yAxisId="right" orientation="right" stroke="#6b7280" style={{ fontSize: '12px' }} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                formatter={(value: any, name: string) => {
+                  if (name === 'Revenue') return `IDR ${value.toLocaleString()}`;
+                  return value;
+                }}
+              />
+              <Legend />
+              <Bar yAxisId="left" dataKey="revenue" fill="#3b82f6" name="Revenue" radius={[8, 8, 0, 0]} />
+              <Bar yAxisId="right" dataKey="orders" fill="#10b981" name="Orders" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[350px] flex items-center justify-center text-gray-500 text-sm">
+            No monthly sales data available
+          </div>
+        )}
       </div>
 
       {/* Top Rated Products */}

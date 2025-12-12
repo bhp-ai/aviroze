@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, extract, cast, Date
 from app.database import get_db
-from app.db_models import User, Product, ProductComment, Order, OrderStatus
+from app.db_models import User, Product, ProductComment, Order, OrderStatus, OrderItem
 from app.auth import get_current_admin_user
 from typing import Dict, List
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
@@ -145,3 +146,139 @@ async def get_trending_products(
         })
 
     return trending_products
+
+@router.get("/sales", response_model=List[Dict])
+async def get_sales_data(
+    period: str = Query("month", regex="^(week|month|year)$"),
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get sales data for charts based on period (Admin only)"""
+
+    now = datetime.now()
+
+    # Determine date range based on period
+    if period == "week":
+        start_date = now - timedelta(days=7)
+        date_format = "%Y-%m-%d"
+        group_by_format = cast(Order.created_at, Date)
+    elif period == "month":
+        start_date = now - timedelta(days=30)
+        date_format = "%Y-%m-%d"
+        group_by_format = cast(Order.created_at, Date)
+    else:  # year
+        start_date = now - timedelta(days=365)
+        date_format = "%Y-%m"
+        # For year, group by month
+        group_by_format = func.to_char(Order.created_at, 'YYYY-MM')
+
+    # Query sales data grouped by date
+    if period == "year":
+        sales_query = db.query(
+            func.to_char(Order.created_at, 'YYYY-MM').label('date'),
+            func.sum(Order.total_amount).label('revenue'),
+            func.count(Order.id).label('orders')
+        ).filter(
+            Order.created_at >= start_date,
+            Order.status == OrderStatus.COMPLETED
+        ).group_by(func.to_char(Order.created_at, 'YYYY-MM')).order_by('date').all()
+    else:
+        sales_query = db.query(
+            cast(Order.created_at, Date).label('date'),
+            func.sum(Order.total_amount).label('revenue'),
+            func.count(Order.id).label('orders')
+        ).filter(
+            Order.created_at >= start_date,
+            Order.status == OrderStatus.COMPLETED
+        ).group_by(cast(Order.created_at, Date)).order_by('date').all()
+
+    sales_data = []
+    for date, revenue, orders in sales_query:
+        date_str = str(date) if isinstance(date, str) else date.strftime(date_format)
+        sales_data.append({
+            "date": date_str,
+            "revenue": float(revenue) if revenue else 0.0,
+            "sales": float(revenue) if revenue else 0.0,  # Sales same as revenue
+            "orders": orders
+        })
+
+    return sales_data
+
+@router.get("/sales/monthly", response_model=List[Dict])
+async def get_monthly_sales(
+    year: int = Query(None),
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get monthly sales data for the year (Admin only)"""
+
+    target_year = year if year else datetime.now().year
+
+    # Query monthly sales for the year
+    monthly_query = db.query(
+        extract('month', Order.created_at).label('month_num'),
+        func.sum(Order.total_amount).label('revenue'),
+        func.count(Order.id).label('orders')
+    ).filter(
+        extract('year', Order.created_at) == target_year,
+        Order.status == OrderStatus.COMPLETED
+    ).group_by(extract('month', Order.created_at)).order_by('month_num').all()
+
+    # Create a dict for existing data
+    monthly_data_dict = {}
+    for month_num, revenue, orders in monthly_query:
+        monthly_data_dict[int(month_num)] = {
+            "revenue": float(revenue) if revenue else 0.0,
+            "orders": orders
+        }
+
+    # Month names
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    # Fill in all 12 months
+    monthly_sales = []
+    for i in range(1, 13):
+        month_data = monthly_data_dict.get(i, {"revenue": 0.0, "orders": 0})
+        monthly_sales.append({
+            "month": month_names[i-1],
+            "revenue": month_data["revenue"],
+            "sales": month_data["revenue"],  # Sales same as revenue
+            "orders": month_data["orders"]
+        })
+
+    return monthly_sales
+
+@router.get("/sales/by-category", response_model=List[Dict])
+async def get_category_sales(
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get sales breakdown by product category (Admin only)"""
+
+    # Query sales by category from completed orders
+    category_query = db.query(
+        Product.category,
+        func.sum(OrderItem.price * OrderItem.quantity).label('total_sales')
+    ).join(OrderItem, Product.id == OrderItem.product_id)\
+     .join(Order, OrderItem.order_id == Order.id)\
+     .filter(Order.status == OrderStatus.COMPLETED)\
+     .group_by(Product.category)\
+     .order_by(desc('total_sales')).all()
+
+    category_sales = []
+    for category, total_sales in category_query:
+        category_name = str(category) if category else "Uncategorized"
+        category_sales.append({
+            "category": category_name,
+            "sales": float(total_sales) if total_sales else 0.0,
+            "revenue": float(total_sales) if total_sales else 0.0
+        })
+
+    # If no data, return empty array
+    if not category_sales:
+        category_sales = [
+            {"category": "No Data", "sales": 0.0, "revenue": 0.0}
+        ]
+
+    return category_sales

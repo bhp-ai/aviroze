@@ -96,6 +96,20 @@ async def update_user(
             detail="User not found"
         )
 
+    # Protect default hardcoded users from modification
+    if user.email in ["admin@admin.com", "user@user.com"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify default system users (admin@admin.com and user@user.com)"
+        )
+
+    # Only system admin (admin@admin.com) can change roles
+    if user_data.role is not None and current_user.email != "admin@admin.com":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the system administrator can change user roles"
+        )
+
     # Update fields
     if user_data.username is not None:
         user.username = user_data.username
@@ -140,6 +154,13 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete your own account"
+        )
+
+    # Protect default hardcoded users from deletion
+    if user.email in ["admin@admin.com", "user@user.com"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot delete default system users (admin@admin.com and user@user.com)"
         )
 
     db.delete(user)
