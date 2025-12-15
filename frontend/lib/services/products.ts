@@ -25,6 +25,7 @@ export interface Product {
   stock: number;
   images: string[];  // Array of base64 image data URLs
   colors?: string[];
+  sizes?: string[];
   created_at: string;
   discount?: Discount;
   voucher?: Voucher;
@@ -38,6 +39,7 @@ export interface ProductCreate {
   stock: number;
   image?: string;
   colors?: string[];
+  sizes?: string[];
   discount?: Discount;
   voucher?: Voucher;
 }

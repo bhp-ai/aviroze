@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ShoppingBag, Heart, Star, User } from 'lucide-react';
+import { ShoppingBag, Heart, Star, User, Share2 } from 'lucide-react';
 import { productsService, Product } from '@/lib/services/products';
 import { commentsService, Comment, CommentCreate } from '@/lib/services/comments';
 import { authService } from '@/lib/services/auth';
@@ -26,6 +26,7 @@ export default function ProductDetailPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   const [selectedColor, setSelectedColor] = useState('');
+  const [selectedSize, setSelectedSize] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -283,22 +284,51 @@ export default function ProductDetailPage() {
           {/* Color Selection */}
           {product.colors && product.colors.length > 0 && (
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-900 mb-3">
-                Available Colors
+              <label className="block text-sm uppercase tracking-widest text-gray-600 mb-3 text-xs">
+                COLOR
               </label>
               <div className="flex gap-2 flex-wrap">
                 {product.colors.map((color, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedColor(color)}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                    className={`px-6 py-2 border transition-all text-sm ${
                       selectedColor === color
-                        ? 'border-gray-900 ring-2 ring-gray-900 ring-offset-2'
-                        : 'border-gray-300 hover:border-gray-500'
+                        ? 'border-foreground bg-foreground/5'
+                        : 'border-border hover:border-foreground/50'
                     }`}
-                    style={{ backgroundColor: color }}
-                    title={color}
-                  />
+                  >
+                    {color}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Size Selection */}
+          {product.sizes && product.sizes.length > 0 && (
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm uppercase tracking-widest text-gray-600 text-xs">
+                  SIZE
+                </label>
+                <Link href="#size-guide" className="text-xs underline text-gray-600 hover:text-foreground">
+                  Size Guide
+                </Link>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {product.sizes.map((size, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedSize(size)}
+                    className={`px-6 py-2 border transition-all text-sm ${
+                      selectedSize === size
+                        ? 'border-foreground bg-foreground/5'
+                        : 'border-border hover:border-foreground/50'
+                    }`}
+                  >
+                    {size}
+                  </button>
                 ))}
               </div>
             </div>
@@ -306,8 +336,8 @@ export default function ProductDetailPage() {
 
           {/* Quantity Selector */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-900 mb-3">
-              Quantity
+            <label className="block text-sm uppercase tracking-widest text-gray-600 mb-3 text-xs">
+              QUANTITY
             </label>
             <div className="flex items-center gap-3">
               <button
@@ -333,17 +363,34 @@ export default function ProductDetailPage() {
             <button
               onClick={handleAddToCart}
               disabled={product.stock === 0 || addingToCart}
-              className="flex-1 bg-black text-white px-6 py-3 text-sm font-medium hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className="flex-1 bg-foreground text-background px-6 py-3 uppercase text-sm font-medium tracking-wider hover:bg-foreground/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
-              <ShoppingBag className="w-4 h-4" />
-              {addingToCart ? 'Added!' : product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
+              {addingToCart ? 'ADDED!' : product.stock > 0 ? 'ADD TO CART' : 'OUT OF STOCK'}
             </button>
             <button
               onClick={handleAddToWishlist}
-              className="border border-gray-300 px-4 py-3 hover:border-gray-900 transition-colors"
+              className="border border-border px-4 py-3 hover:border-foreground transition-colors"
               title="Add to wishlist"
             >
               <Heart className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: product.name,
+                    text: product.description,
+                    url: window.location.href,
+                  }).catch((error) => console.log('Error sharing', error));
+                } else {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast.success('Link copied to clipboard!');
+                }
+              }}
+              className="border border-border px-4 py-3 hover:border-foreground transition-colors"
+              title="Share"
+            >
+              <Share2 className="w-5 h-5" />
             </button>
           </div>
 

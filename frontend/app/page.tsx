@@ -15,8 +15,8 @@ export default function Home() {
     const fetchProducts = async () => {
       try {
         const [bestsellersData, newArrivalsData] = await Promise.all([
-          productsService.getBestsellers(3),
-          productsService.getNewArrivals(3),
+          productsService.getBestsellers(4),
+          productsService.getNewArrivals(4),
         ]);
         setBestsellers(bestsellersData);
         setNewArrivals(newArrivalsData);
@@ -80,15 +80,16 @@ export default function Home() {
       </section>
 
       {/* Shop by Collection */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">
-            Shop by Collection
-          </h2>
-          <p className="text-gray-600">Curated selections for every occasion</p>
-        </div>
+      <section className="bg-[#faf8f5] py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="font-serif text-3xl lg:text-4xl mb-3">
+              Shop by Collection
+            </h2>
+            <p className="text-gray-600">Curated selections for every occasion</p>
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Workwear Essentials */}
           <Link href="/collections/workwear" className="group relative h-96 overflow-hidden">
             <Image
@@ -120,25 +121,27 @@ export default function Home() {
               <span className="text-sm underline">Explore Collection</span>
             </div>
           </Link>
+          </div>
         </div>
       </section>
 
       {/* Bestsellers */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 border-t border-gray-200">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-              Bestsellers
-            </h2>
-            <p className="text-gray-600 mt-2">Our most loved pieces</p>
+      <section className="bg-[#f5f3ef] py-16 border-t border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="font-serif text-3xl lg:text-4xl mb-2">
+                Bestsellers
+              </h2>
+              <p className="text-gray-600 mt-2">Our most loved pieces</p>
+            </div>
+            <Link href="/products" className="nav-link text-sm font-medium">
+              View All
+            </Link>
           </div>
-          <Link href="/products" className="text-sm font-medium hover:underline">
-            View All
-          </Link>
-        </div>
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[1, 2, 3].map((i) => (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="animate-pulse">
                 <div className="aspect-[3/4] bg-gray-200 mb-3"></div>
                 <div className="h-4 bg-gray-200 mb-2 w-3/4"></div>
@@ -147,7 +150,7 @@ export default function Home() {
             ))}
           </div>
         ) : bestsellers.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
             {bestsellers.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
@@ -155,24 +158,25 @@ export default function Home() {
         ) : (
           <p className="text-center text-gray-500 py-8">No bestsellers available at the moment.</p>
         )}
+        </div>
       </section>
 
       {/* New Arrivals */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 border-t border-gray-200">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+            <h2 className="font-serif text-3xl tracking-tight text-gray-900">
               New Arrivals
             </h2>
             <p className="text-gray-600 mt-2">Fresh additions to our collection</p>
           </div>
-          <Link href="/products" className="text-sm font-medium hover:underline">
+          <Link href="/products" className="nav-link text-sm font-medium">
             View All
           </Link>
         </div>
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[1, 2, 3].map((i) => (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="animate-pulse">
                 <div className="aspect-[3/4] bg-gray-200 mb-3"></div>
                 <div className="h-4 bg-gray-200 mb-2 w-3/4"></div>
@@ -181,7 +185,7 @@ export default function Home() {
             ))}
           </div>
         ) : newArrivals.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
             {newArrivals.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
@@ -192,19 +196,20 @@ export default function Home() {
       </section>
 
       {/* The Aviroze Story */}
-      <section className="bg-gray-50 py-20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900 mb-6">
+      <section className="bg-[#eeece7] py-20">
+        <div className="max-w-5xl mx-auto px-8 sm:px-12 lg:px-16 text-center">
+          <h2 className="text-sm uppercase tracking-[0.3em] text-muted-foreground mb-6">
             The Aviroze Story
           </h2>
-          <blockquote className="text-xl text-gray-700 italic leading-relaxed mb-8">
+          <blockquote className="font-serif text-3xl lg:text-4xl italic leading-relaxed mb-8">
             "We believe in creating timeless pieces that empower women to feel confident and elegant in every aspect of their professional lives."
           </blockquote>
           <Link
             href="/about"
-            className="inline-block text-sm font-medium hover:underline"
+            className="border border-1 border-black px-12 py-4 inline-flex items-center justify-center uppercase text-sm font-medium hover:bg-foreground hover:text-background transition-colors "
           >
             Discover Our Story
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-arrow-right ml-2 h-4 w-4"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
           </Link>
         </div>
       </section>

@@ -53,6 +53,7 @@ export default function ProductsPage() {
     image: '',
     images: [],
     colors: [],
+    sizes: [],
     createdAt: '',
     discount: {
       enabled: false,
@@ -68,6 +69,7 @@ export default function ProductsPage() {
     },
   });
   const [colorInput, setColorInput] = useState('');
+  const [sizeInput, setSizeInput] = useState('');
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
@@ -152,6 +154,7 @@ export default function ProductsPage() {
         stock: 0,
         images: [],
         colors: [],
+        sizes: [],
         createdAt: new Date().toISOString(),
         discount: {
           enabled: false,
@@ -170,6 +173,7 @@ export default function ProductsPage() {
       setImagePreviews([]);
     }
     setColorInput('');
+    setSizeInput('');
     setIsModalOpen(true);
   };
 
@@ -246,6 +250,7 @@ export default function ProductsPage() {
         category: formData.category,
         stock: formData.stock,
         colors: formData.colors || [],
+        sizes: formData.sizes || [],
         discount: formData.discount,
         voucher: formData.voucher
       };
@@ -754,6 +759,61 @@ export default function ProductsPage() {
                                   setFormData({
                                     ...formData,
                                     colors: formData.colors?.filter((_, i) => i !== index)
+                                  });
+                                }}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Sizes Section */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Product Sizes
+                      </label>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={sizeInput}
+                          onChange={(e) => setSizeInput(e.target.value)}
+                          placeholder="Enter size (e.g., XS, S, M, L, XL)"
+                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (sizeInput && !formData.sizes?.includes(sizeInput)) {
+                              setFormData({
+                                ...formData,
+                                sizes: [...(formData.sizes || []), sizeInput]
+                              });
+                              setSizeInput('');
+                            }
+                          }}
+                          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                        >
+                          Add Size
+                        </button>
+                      </div>
+                      {formData.sizes && formData.sizes.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {formData.sizes.map((size, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-lg border border-gray-300"
+                            >
+                              <span className="text-sm text-gray-700">{size}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormData({
+                                    ...formData,
+                                    sizes: formData.sizes?.filter((_, i) => i !== index)
                                   });
                                 }}
                                 className="text-red-600 hover:text-red-800"

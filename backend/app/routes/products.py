@@ -94,7 +94,8 @@ async def get_products(
             "category": product.category,
             "stock": product.stock,
             "images": images,
-            "colors": [],  # TODO: Add colors from product_colors table
+            "colors": product.colors or [],
+            "sizes": product.sizes or [],
             "created_at": product.created_at,
             "discount": {
                 "enabled": product.discount_enabled,
@@ -174,7 +175,8 @@ async def get_product(
         "category": product.category,
         "stock": product.stock,
         "images": images,
-        "colors": [],
+        "colors": product.colors or [],
+        "sizes": product.sizes or [],
         "created_at": product.created_at,
         "discount": {
             "enabled": product.discount_enabled,
@@ -201,6 +203,7 @@ async def create_product(
     stock: int = Form(...),
     images: List[UploadFile] = File([]),
     colors: Optional[str] = Form(None),
+    sizes: Optional[str] = Form(None),
     discount: Optional[str] = Form(None),
     voucher: Optional[str] = Form(None),
     current_user: User = Depends(get_current_admin_user),
@@ -209,6 +212,7 @@ async def create_product(
     """Create a new product (Admin only)"""
     # Parse JSON fields
     colors_list = json.loads(colors) if colors else []
+    sizes_list = json.loads(sizes) if sizes else []
     discount_data = json.loads(discount) if discount else None
     voucher_data = json.loads(voucher) if voucher else None
 
@@ -225,6 +229,8 @@ async def create_product(
         price=price,
         category=category,
         stock=stock,
+        colors=colors_list,
+        sizes=sizes_list,
         discount_enabled=discount_data.get('enabled', False) if discount_data else False,
         discount_type=discount_data.get('type') if discount_data else None,
         discount_value=discount_data.get('value') if discount_data else None,
@@ -265,7 +271,8 @@ async def create_product(
         "category": new_product.category,
         "stock": new_product.stock,
         "images": images_list,
-        "colors": colors_list,
+        "colors": new_product.colors or [],
+        "sizes": new_product.sizes or [],
         "created_at": new_product.created_at,
         "discount": {
             "enabled": new_product.discount_enabled,
@@ -291,6 +298,7 @@ async def update_product(
     stock: Optional[int] = Form(None),
     images: List[UploadFile] = File([]),
     colors: Optional[str] = Form(None),
+    sizes: Optional[str] = Form(None),
     discount: Optional[str] = Form(None),
     voucher: Optional[str] = Form(None),
     replace_images: bool = Form(False),  # If true, replace all images; if false, add to existing
@@ -336,9 +344,12 @@ async def update_product(
         product.voucher_expiry_date = voucher_data.get('expiry_date')
 
     # Parse and update colors if provided
-    colors_list = []
     if colors:
-        colors_list = json.loads(colors)
+        product.colors = json.loads(colors)
+
+    # Parse and update sizes if provided
+    if sizes:
+        product.sizes = json.loads(sizes)
 
     # Handle images update
     if images and len(images) > 0 and images[0].filename:
@@ -375,7 +386,8 @@ async def update_product(
         "category": product.category,
         "stock": product.stock,
         "images": images_list,
-        "colors": colors_list,
+        "colors": product.colors or [],
+        "sizes": product.sizes or [],
         "created_at": product.created_at,
         "discount": {
             "enabled": product.discount_enabled,

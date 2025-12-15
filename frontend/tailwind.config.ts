@@ -13,6 +13,9 @@ const config: Config = {
         foreground: "var(--foreground)",
         accent: "var(--accent)",
         border: "var(--border)",
+        navbar: "var(--navbar-bg)",
+        section: "var(--section-bg)",
+        footer: "var(--footer-bg)",
       },
       fontFamily: {
         sans: ["Jost", "system-ui", "sans-serif"],

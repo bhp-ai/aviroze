@@ -85,6 +85,8 @@ class Product(Base):
     stock = Column(Integer, default=0, nullable=False)
     image = Column(LargeBinary, nullable=True)  # Kept for backward compatibility (primary image)
     image_mimetype = Column(String(50), nullable=True)  # Store MIME type (e.g., image/jpeg, image/png)
+    colors = Column(JSON, nullable=True, default=list)  # Array of color names
+    sizes = Column(JSON, nullable=True, default=list)  # Array of size options
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

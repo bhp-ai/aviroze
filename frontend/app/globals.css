@@ -3,17 +3,20 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #1C1C1C;
-  --accent: #1C1C1C;
-  --border: #EFEFEF;
+  --background: #faf8f5;
+  --foreground: #30251d;
+  --accent: #30251d;
+  --border: #e8e4df;
+  --navbar-bg: #faf7f5;
+  --section-bg: #eeece7;
+  --footer-bg: #f5f3ef;
   --font-sans: var(--font-jost);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #ffffff;
-    --foreground: #1C1C1C;
+    --background: #faf8f5;
+    --foreground: #30251d;
   }
 }
 
@@ -52,4 +55,25 @@ button {
 
 .animate-slide-in {
   animation: slide-in 0.3s ease-out;
+}
+
+/* Navbar link underline animation */
+.nav-link {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 1px;
+  bottom: -4px;
+  left: 0;
+  background-color: var(--foreground);
+  transition: width 0.3s ease;
+}
+
+.nav-link:hover::after {
+  width: 100%;
 }
