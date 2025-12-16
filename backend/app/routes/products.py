@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import List, Optional
 from app.database import get_db
-from app.db_models import Product, ProductImage, User, Order, OrderItem, OrderStatus, UserActivityType
+from app.db_models import Product, ProductImage, ProductVariant, User, Order, OrderItem, OrderStatus, UserActivityType
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from app.auth import get_current_user, get_current_admin_user
 from app.logging_helper import log_user_activity
@@ -33,6 +33,22 @@ def get_product_images(product: Product) -> List[str]:
         images.append(convert_image_to_data_url(product.image, product.image_mimetype or "image/jpeg"))
 
     return images
+
+def get_product_variants(product: Product) -> List[dict]:
+    """Get all product variants with size and quantity"""
+    variants = []
+    for variant in product.variants:
+        variants.append({
+            "size": variant.size,
+            "quantity": variant.quantity
+        })
+    return variants
+
+def calculate_total_stock(product: Product) -> int:
+    """Calculate total stock from variants"""
+    if product.variants:
+        return sum(variant.quantity for variant in product.variants)
+    return product.stock  # Fallback to legacy stock field
 
 @router.get("/{product_id}/image")
 async def get_product_image(
@@ -85,6 +101,8 @@ async def get_products(
     for product in products:
         # Get all product images
         images = get_product_images(product)
+        variants = get_product_variants(product)
+        total_stock = calculate_total_stock(product)
 
         product_dict = {
             "id": product.id,
@@ -92,10 +110,11 @@ async def get_products(
             "description": product.description,
             "price": product.price,
             "category": product.category,
-            "stock": product.stock,
+            "stock": total_stock,
             "images": images,
             "colors": product.colors or [],
             "sizes": product.sizes or [],
+            "variants": variants,
             "created_at": product.created_at,
             "discount": {
                 "enabled": product.discount_enabled,
@@ -152,7 +171,7 @@ async def get_product(
     try:
         log_user_activity(
             db=db,
-            activity_type=UserActivityType.PRODUCT_VIEW,
+            activity_type=UserActivityType.PRODUCT_VIEW.value,
             user_id=user_id,
             resource_type="product",
             resource_id=product.id,
@@ -166,6 +185,8 @@ async def get_product(
 
     # Get all product images
     images = get_product_images(product)
+    variants = get_product_variants(product)
+    total_stock = calculate_total_stock(product)
 
     product_dict = {
         "id": product.id,
@@ -173,10 +194,11 @@ async def get_product(
         "description": product.description,
         "price": product.price,
         "category": product.category,
-        "stock": product.stock,
+        "stock": total_stock,
         "images": images,
         "colors": product.colors or [],
         "sizes": product.sizes or [],
+        "variants": variants,
         "created_at": product.created_at,
         "discount": {
             "enabled": product.discount_enabled,
@@ -204,6 +226,7 @@ async def create_product(
     images: List[UploadFile] = File([]),
     colors: Optional[str] = Form(None),
     sizes: Optional[str] = Form(None),
+    variants: Optional[str] = Form(None),
     discount: Optional[str] = Form(None),
     voucher: Optional[str] = Form(None),
     current_user: User = Depends(get_current_admin_user),
@@ -213,6 +236,7 @@ async def create_product(
     # Parse JSON fields
     colors_list = json.loads(colors) if colors else []
     sizes_list = json.loads(sizes) if sizes else []
+    variants_list = json.loads(variants) if variants else []
     discount_data = json.loads(discount) if discount else None
     voucher_data = json.loads(voucher) if voucher else None
 
@@ -257,11 +281,23 @@ async def create_product(
             )
             db.add(product_image)
 
+    # Store product variants (size-based inventory)
+    for variant_data in variants_list:
+        if variant_data.get('size') and variant_data.get('quantity') is not None:
+            variant = ProductVariant(
+                product_id=new_product.id,
+                size=variant_data['size'],
+                quantity=variant_data['quantity']
+            )
+            db.add(variant)
+
     db.commit()
     db.refresh(new_product)
 
     # Get all product images
     images_list = get_product_images(new_product)
+    variants_list_response = get_product_variants(new_product)
+    total_stock = calculate_total_stock(new_product)
 
     return {
         "id": new_product.id,
@@ -269,10 +305,11 @@ async def create_product(
         "description": new_product.description,
         "price": new_product.price,
         "category": new_product.category,
-        "stock": new_product.stock,
+        "stock": total_stock,
         "images": images_list,
         "colors": new_product.colors or [],
         "sizes": new_product.sizes or [],
+        "variants": variants_list_response,
         "created_at": new_product.created_at,
         "discount": {
             "enabled": new_product.discount_enabled,
@@ -299,6 +336,7 @@ async def update_product(
     images: List[UploadFile] = File([]),
     colors: Optional[str] = Form(None),
     sizes: Optional[str] = Form(None),
+    variants: Optional[str] = Form(None),
     discount: Optional[str] = Form(None),
     voucher: Optional[str] = Form(None),
     replace_images: bool = Form(False),  # If true, replace all images; if false, add to existing
@@ -344,12 +382,38 @@ async def update_product(
         product.voucher_expiry_date = voucher_data.get('expiry_date')
 
     # Parse and update colors if provided
-    if colors:
-        product.colors = json.loads(colors)
+    if colors is not None:
+        try:
+            product.colors = json.loads(colors) if colors else []
+        except json.JSONDecodeError:
+            print(f"Failed to parse colors: {colors}")
+            product.colors = []
 
     # Parse and update sizes if provided
-    if sizes:
-        product.sizes = json.loads(sizes)
+    if sizes is not None:
+        try:
+            product.sizes = json.loads(sizes) if sizes else []
+        except json.JSONDecodeError:
+            print(f"Failed to parse sizes: {sizes}")
+            product.sizes = []
+
+    # Update product variants if provided
+    if variants is not None:
+        try:
+            variants_list = json.loads(variants) if variants else []
+            # Delete existing variants
+            db.query(ProductVariant).filter(ProductVariant.product_id == product_id).delete()
+            # Add new variants
+            for variant_data in variants_list:
+                if variant_data.get('size') and variant_data.get('quantity') is not None:
+                    variant = ProductVariant(
+                        product_id=product_id,
+                        size=variant_data['size'],
+                        quantity=variant_data['quantity']
+                    )
+                    db.add(variant)
+        except json.JSONDecodeError:
+            print(f"Failed to parse variants: {variants}")
 
     # Handle images update
     if images and len(images) > 0 and images[0].filename:
@@ -377,6 +441,8 @@ async def update_product(
 
     # Get all product images
     images_list = get_product_images(product)
+    variants_list_response = get_product_variants(product)
+    total_stock = calculate_total_stock(product)
 
     return {
         "id": product.id,
@@ -384,10 +450,11 @@ async def update_product(
         "description": product.description,
         "price": product.price,
         "category": product.category,
-        "stock": product.stock,
+        "stock": total_stock,
         "images": images_list,
         "colors": product.colors or [],
         "sizes": product.sizes or [],
+        "variants": variants_list_response,
         "created_at": product.created_at,
         "discount": {
             "enabled": product.discount_enabled,
@@ -463,6 +530,8 @@ async def get_bestsellers(
     for product, total_sold in bestsellers:
         # Get all product images
         images = get_product_images(product)
+        variants = get_product_variants(product)
+        total_stock = calculate_total_stock(product)
 
         product_dict = {
             "id": product.id,
@@ -470,9 +539,11 @@ async def get_bestsellers(
             "description": product.description,
             "price": product.price,
             "category": product.category,
-            "stock": product.stock,
+            "stock": total_stock,
             "images": images,
-            "colors": [],
+            "colors": product.colors or [],
+            "sizes": product.sizes or [],
+            "variants": variants,
             "created_at": product.created_at,
             "discount": {
                 "enabled": product.discount_enabled,
@@ -504,6 +575,8 @@ async def get_new_arrivals(
     for product in products:
         # Get all product images
         images = get_product_images(product)
+        variants = get_product_variants(product)
+        total_stock = calculate_total_stock(product)
 
         product_dict = {
             "id": product.id,
@@ -511,9 +584,11 @@ async def get_new_arrivals(
             "description": product.description,
             "price": product.price,
             "category": product.category,
-            "stock": product.stock,
+            "stock": total_stock,
             "images": images,
-            "colors": [],
+            "colors": product.colors or [],
+            "sizes": product.sizes or [],
+            "variants": variants,
             "created_at": product.created_at,
             "discount": {
                 "enabled": product.discount_enabled,

@@ -16,6 +16,11 @@ export interface Voucher {
   expiry_date?: string;
 }
 
+export interface ProductVariant {
+  size: string;
+  quantity: number;
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -26,6 +31,7 @@ export interface Product {
   images: string[];  // Array of base64 image data URLs
   colors?: string[];
   sizes?: string[];
+  variants?: ProductVariant[];
   created_at: string;
   discount?: Discount;
   voucher?: Voucher;
@@ -40,6 +46,7 @@ export interface ProductCreate {
   image?: string;
   colors?: string[];
   sizes?: string[];
+  variants?: ProductVariant[];
   discount?: Discount;
   voucher?: Voucher;
 }
@@ -96,6 +103,14 @@ export const productsService = {
       formData.append('colors', JSON.stringify(data.colors));
     }
 
+    if (data.sizes && data.sizes.length > 0) {
+      formData.append('sizes', JSON.stringify(data.sizes));
+    }
+
+    if (data.variants && data.variants.length > 0) {
+      formData.append('variants', JSON.stringify(data.variants));
+    }
+
     if (data.discount) {
       formData.append('discount', JSON.stringify(data.discount));
     }
@@ -131,6 +146,14 @@ export const productsService = {
 
     if (data.colors) {
       formData.append('colors', JSON.stringify(data.colors));
+    }
+
+    if (data.sizes) {
+      formData.append('sizes', JSON.stringify(data.sizes));
+    }
+
+    if (data.variants) {
+      formData.append('variants', JSON.stringify(data.variants));
     }
 
     if (data.discount) {

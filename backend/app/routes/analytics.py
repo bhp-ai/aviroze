@@ -173,33 +173,59 @@ async def get_sales_data(
         group_by_format = func.to_char(Order.created_at, 'YYYY-MM')
 
     # Query sales data grouped by date
+    # For revenue: only completed orders
+    # For total orders: all orders
     if period == "year":
-        sales_query = db.query(
+        # Revenue from completed orders
+        revenue_query = db.query(
             func.to_char(Order.created_at, 'YYYY-MM').label('date'),
-            func.sum(Order.total_amount).label('revenue'),
-            func.count(Order.id).label('orders')
+            func.sum(Order.total_amount).label('revenue')
         ).filter(
             Order.created_at >= start_date,
             Order.status == OrderStatus.COMPLETED
-        ).group_by(func.to_char(Order.created_at, 'YYYY-MM')).order_by('date').all()
+        ).group_by(func.to_char(Order.created_at, 'YYYY-MM')).all()
+
+        # Total orders (all statuses)
+        orders_query = db.query(
+            func.to_char(Order.created_at, 'YYYY-MM').label('date'),
+            func.count(Order.id).label('total_orders')
+        ).filter(
+            Order.created_at >= start_date
+        ).group_by(func.to_char(Order.created_at, 'YYYY-MM')).all()
     else:
-        sales_query = db.query(
+        # Revenue from completed orders
+        revenue_query = db.query(
             cast(Order.created_at, Date).label('date'),
-            func.sum(Order.total_amount).label('revenue'),
-            func.count(Order.id).label('orders')
+            func.sum(Order.total_amount).label('revenue')
         ).filter(
             Order.created_at >= start_date,
             Order.status == OrderStatus.COMPLETED
-        ).group_by(cast(Order.created_at, Date)).order_by('date').all()
+        ).group_by(cast(Order.created_at, Date)).all()
+
+        # Total orders (all statuses)
+        orders_query = db.query(
+            cast(Order.created_at, Date).label('date'),
+            func.count(Order.id).label('total_orders')
+        ).filter(
+            Order.created_at >= start_date
+        ).group_by(cast(Order.created_at, Date)).all()
+
+    # Combine revenue and orders data
+    revenue_dict = {str(date) if isinstance(date, str) else date.strftime(date_format): float(revenue) if revenue else 0.0
+                    for date, revenue in revenue_query}
+    orders_dict = {str(date) if isinstance(date, str) else date.strftime(date_format): total_orders
+                   for date, total_orders in orders_query}
+
+    # Get all unique dates
+    all_dates = sorted(set(revenue_dict.keys()) | set(orders_dict.keys()))
 
     sales_data = []
-    for date, revenue, orders in sales_query:
-        date_str = str(date) if isinstance(date, str) else date.strftime(date_format)
+    for date_str in all_dates:
         sales_data.append({
             "date": date_str,
-            "revenue": float(revenue) if revenue else 0.0,
-            "sales": float(revenue) if revenue else 0.0,  # Sales same as revenue
-            "orders": orders
+            "revenue": revenue_dict.get(date_str, 0.0),
+            "sales": revenue_dict.get(date_str, 0.0),  # Sales same as revenue
+            "orders": orders_dict.get(date_str, 0)
         })
 
     return sales_data

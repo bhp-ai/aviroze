@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LayoutDashboard, Users, LogOut, Menu, X, Package, MessageSquare, ShoppingBag, FileText } from 'lucide-react';
 import { authService } from '@/lib/services/auth';
+import { usePageTracking } from '@/hooks/usePageTracking';
 
 export default function AdminLayout({
   children,
@@ -15,6 +16,9 @@ export default function AdminLayout({
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Track all admin page visits
+  usePageTracking();
 
   useEffect(() => {
     // Check if user is logged in, session is valid, and user is admin
@@ -72,11 +76,11 @@ export default function AdminLayout({
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full bg-gray-900 text-white w-64 transform transition-transform duration-300 ease-in-out z-40 ${
+        className={`fixed top-0 left-0 h-full bg-gray-900 text-white w-64 transform transition-transform duration-300 ease-in-out z-40 flex flex-col overflow-hidden ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        <div className="p-6 flex items-center justify-between">
+        <div className="p-6 flex items-center justify-between flex-shrink-0">
           <div>
             <h1 className="text-2xl font-bold">AVIROZE</h1>
             <p className="text-sm text-gray-400 mt-1">Admin Panel</p>
@@ -90,7 +94,7 @@ export default function AdminLayout({
           </button>
         </div>
 
-        <nav className="mt-6">
+        <nav className="mt-6 flex-1 overflow-y-auto overscroll-contain">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
@@ -112,8 +116,8 @@ export default function AdminLayout({
           })}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-6">
-          <div className="mb-4 pb-4 border-t border-gray-700 pt-4">
+        <div className="p-6 border-t border-gray-700 flex-shrink-0">
+          <div className="mb-4">
             <p className="text-sm text-gray-400">Logged in as</p>
             <p className="font-medium">{user.username}</p>
           </div>

@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { CartProvider } from '@/contexts/CartContext';
 import { ToastProvider } from '@/contexts/ToastContext';
+import { usePageTracking } from '@/hooks/usePageTracking';
 
 export default function LayoutWrapper({
   children,
@@ -14,8 +15,13 @@ export default function LayoutWrapper({
 }) {
   const pathname = usePathname();
 
-  // Hide navbar and footer for admin and login pages
+  // Track all page visits (except admin, which has its own tracking in admin layout)
   const isAdminRoute = pathname?.startsWith('/admin');
+
+  // Only track non-admin pages here
+  usePageTracking();
+
+  // Hide navbar and footer for admin and login pages
   const isLoginRoute = pathname === '/login';
   const isSignupRoute = pathname === '/signup';
   const hideNavAndFooter = isAdminRoute || isLoginRoute || isSignupRoute;

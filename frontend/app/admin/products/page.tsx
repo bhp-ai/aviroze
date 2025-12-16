@@ -41,6 +41,22 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [validationErrors, setValidationErrors] = useState<{
+    name?: boolean;
+    description?: boolean;
+    category?: boolean;
+  }>({});
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [productsPerPage, setProductsPerPage] = useState(10);
   const [formData, setFormData] = useState<Product>({
@@ -54,6 +70,7 @@ export default function ProductsPage() {
     images: [],
     colors: [],
     sizes: [],
+    variants: [],
     createdAt: '',
     discount: {
       enabled: false,
@@ -69,9 +86,11 @@ export default function ProductsPage() {
     },
   });
   const [colorInput, setColorInput] = useState('');
-  const [sizeInput, setSizeInput] = useState('');
+  const [variantSizeInput, setVariantSizeInput] = useState('');
+  const [variantQuantityInput, setVariantQuantityInput] = useState<number>(0);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
 
   // Load products from API on mount
   useEffect(() => {
@@ -155,6 +174,7 @@ export default function ProductsPage() {
         images: [],
         colors: [],
         sizes: [],
+        variants: [],
         createdAt: new Date().toISOString(),
         discount: {
           enabled: false,
@@ -173,7 +193,8 @@ export default function ProductsPage() {
       setImagePreviews([]);
     }
     setColorInput('');
-    setSizeInput('');
+    setVariantSizeInput('');
+    setVariantQuantityInput(0);
     setIsModalOpen(true);
   };
 
@@ -184,36 +205,6 @@ export default function ProductsPage() {
     setImagePreviews([]);
   };
 
-  const handleExportCSV = () => {
-    const csvData = products.map(product => ({
-      id: product.id,
-      name: product.name,
-      description: product.description,
-      price: product.price,
-      category: product.category,
-      stock: product.stock,
-      discount_enabled: product.discount?.enabled ? 'Yes' : 'No',
-      discount_type: product.discount?.type || '',
-      discount_value: product.discount?.value || '',
-      created_at: product.created_at || product.createdAt,
-    }));
-
-    const columns = [
-      { header: 'ID', key: 'id' },
-      { header: 'Name', key: 'name' },
-      { header: 'Description', key: 'description' },
-      { header: 'Price', key: 'price', format: formatCurrencyForCSV },
-      { header: 'Category', key: 'category' },
-      { header: 'Stock', key: 'stock' },
-      { header: 'Discount Enabled', key: 'discount_enabled' },
-      { header: 'Discount Type', key: 'discount_type' },
-      { header: 'Discount Value', key: 'discount_value' },
-      { header: 'Created At', key: 'created_at', format: formatDateForCSV },
-    ];
-
-    const filename = `products_${new Date().toISOString().split('T')[0]}.csv`;
-    exportToCSV(csvData, columns, filename);
-  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -239,31 +230,80 @@ export default function ProductsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Form submitted', { editingProduct: !!editingProduct, formData });
     setLoading(true);
     setError('');
+    setValidationErrors({});
+
+    // Validation
+    const errors: { name?: boolean; description?: boolean; category?: boolean } = {};
+    let errorMessage = '';
+
+    if (formData.name.trim().length < 3) {
+      console.log('Validation failed: Product name needs at least 3 characters, got:', formData.name.trim().length);
+      errors.name = true;
+      errorMessage = 'Product name must have at least 3 characters';
+    }
+
+    if (formData.description.trim().length < 10) {
+      console.log('Validation failed: Description needs at least 10 characters, got:', formData.description.trim().length);
+      errors.description = true;
+      if (!errorMessage) errorMessage = 'Description must have at least 10 characters';
+    }
+
+    if (formData.category.trim().length < 3) {
+      console.log('Validation failed: Category needs at least 3 characters, got:', formData.category.trim().length);
+      errors.category = true;
+      if (!errorMessage) errorMessage = 'Category must have at least 3 characters';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      setError(errorMessage);
+      setLoading(false);
+      // Scroll to top of modal to show error
+      document.getElementById('product-modal')?.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    console.log('Validation passed, proceeding with save');
 
     try {
+      // Calculate stock from variants if they exist
+      const calculatedStock = formData.variants && formData.variants.length > 0
+        ? formData.variants.reduce((sum, v) => sum + v.quantity, 0)
+        : formData.stock;
+
       const productData = {
         name: formData.name,
         description: formData.description,
         price: formData.price,
         category: formData.category,
-        stock: formData.stock,
+        stock: calculatedStock,
         colors: formData.colors || [],
         sizes: formData.sizes || [],
+        variants: formData.variants || [],
         discount: formData.discount,
         voucher: formData.voucher
       };
 
+      console.log('Product data prepared:', productData);
+      console.log('Image files:', imageFiles.length, 'files');
+
       if (editingProduct) {
+        console.log('Calling update API for product ID:', formData.id);
         // Update existing product (replace images if new ones are provided)
-        await productsService.update(formData.id, productData, imageFiles.length > 0 ? imageFiles : undefined, true);
+        await productsService.update(formData.id, productData, imageFiles.length > 0 ? imageFiles : undefined, imageFiles.length > 0);
+        console.log('Update successful');
       } else {
+        console.log('Calling create API');
         // Add new product
         await productsService.create(productData, imageFiles.length > 0 ? imageFiles : undefined);
+        console.log('Create successful');
       }
 
       // Refresh products list
+      console.log('Refreshing products list');
       await fetchProducts();
       handleCloseModal();
     } catch (err: any) {
@@ -275,18 +315,118 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this product?')) {
-      setLoading(true);
-      try {
-        await productsService.delete(id);
-        await fetchProducts();
-      } catch (err: any) {
-        console.error('Failed to delete product:', err);
-        setError(err.response?.data?.detail || 'Failed to delete product');
-      } finally {
-        setLoading(false);
-      }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Product',
+      message: 'Are you sure you want to delete this product? This action cannot be undone.',
+      onConfirm: async () => {
+        setConfirmModal({ ...confirmModal, isOpen: false });
+        setLoading(true);
+        try {
+          await productsService.delete(id);
+          await fetchProducts();
+        } catch (err: any) {
+          console.error('Failed to delete product:', err);
+          setError(err.response?.data?.detail || 'Failed to delete product');
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedProducts.length === currentProducts.length) {
+      setSelectedProducts([]);
+    } else {
+      setSelectedProducts(currentProducts.map(p => p.id));
     }
+  };
+
+  const handleSelectProduct = (id: number) => {
+    setSelectedProducts(prev =>
+      prev.includes(id)
+        ? prev.filter(pId => pId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Multiple Products',
+      message: `Are you sure you want to delete ${selectedProducts.length} ${selectedProducts.length === 1 ? 'product' : 'products'}? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmModal({ ...confirmModal, isOpen: false });
+        try {
+          setLoading(true);
+          await Promise.all(selectedProducts.map(id => productsService.delete(id)));
+          await fetchProducts();
+          setSelectedProducts([]);
+        } catch (err) {
+          console.error('Failed to delete products:', err);
+          setError('Failed to delete some products');
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleBulkOutOfStock = async () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Mark Out of Stock',
+      message: `Mark ${selectedProducts.length} ${selectedProducts.length === 1 ? 'product' : 'products'} as out of stock?`,
+      onConfirm: async () => {
+        setConfirmModal({ ...confirmModal, isOpen: false });
+        try {
+          setLoading(true);
+          await Promise.all(selectedProducts.map(id =>
+            productsService.update(id, { stock: 0, variants: [] })
+          ));
+          await fetchProducts();
+          setSelectedProducts([]);
+        } catch (err) {
+          console.error('Failed to update products:', err);
+          setError('Failed to update some products');
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleExportCSV = () => {
+    const selectedProductsData = products.filter(p => selectedProducts.includes(p.id));
+
+    // CSV Headers
+    const headers = ['ID', 'Name', 'Description', 'Price', 'Category', 'Stock', 'Colors', 'Variants', 'Created At'];
+
+    // CSV Rows
+    const rows = selectedProductsData.map(p => [
+      p.id,
+      `"${p.name}"`,
+      `"${p.description}"`,
+      p.price,
+      p.category,
+      p.stock,
+      `"${(p.colors || []).join(', ')}"`,
+      `"${(p.variants || []).map(v => `${v.size}:${v.quantity}`).join(', ')}"`,
+      new Date(p.created_at).toLocaleDateString()
+    ]);
+
+    // Combine headers and rows
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `products_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const calculateFinalPrice = (product: Product) => {
@@ -306,6 +446,38 @@ export default function ProductsPage() {
         <h1 className="text-3xl font-bold text-gray-900">Products Management</h1>
         <p className="text-gray-600 mt-2">Manage your product catalog</p>
       </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedProducts.length > 0 && (
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+          <span className="text-sm font-medium text-blue-900">
+            {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={handleBulkOutOfStock}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
+            >
+              <Package className="w-4 h-4" />
+              Mark Out of Stock
+            </button>
+            <button
+              onClick={handleExportCSV}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Selected
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Actions Bar */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -337,16 +509,6 @@ export default function ProductsPage() {
           </select>
         </div>
 
-        {/* Export CSV Button */}
-        <button
-          onClick={handleExportCSV}
-          disabled={products.length === 0}
-          className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Download className="w-5 h-5" />
-          <span>Export CSV</span>
-        </button>
-
         {/* Add Product Button */}
         <button
           onClick={() => handleOpenModal()}
@@ -363,6 +525,14 @@ export default function ProductsPage() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-3 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={selectedProducts.length === currentProducts.length && currentProducts.length > 0}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                  />
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Product
                 </th>
@@ -371,6 +541,9 @@ export default function ProductsPage() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Colors
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Sizes
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Price
@@ -392,6 +565,14 @@ export default function ProductsPage() {
             <tbody className="divide-y divide-gray-200">
               {currentProducts.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-3 py-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedProducts.includes(product.id)}
+                      onChange={() => handleSelectProduct(product.id)}
+                      className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                    />
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <ProductImage images={product.images} productName={product.name} />
@@ -419,6 +600,30 @@ export default function ProductsPage() {
                         ))
                       ) : (
                         <span className="text-xs text-gray-400">No colors</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-1 flex-wrap max-w-[200px]">
+                      {product.variants && product.variants.length > 0 ? (
+                        <>
+                          {product.variants.slice(0, 3).map((variant, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex px-2 py-1 text-xs font-semibold rounded bg-gray-100 text-gray-800 border border-gray-300"
+                              title={`${variant.size}: ${variant.quantity} units`}
+                            >
+                              {variant.size} ({variant.quantity})
+                            </span>
+                          ))}
+                          {product.variants.length > 3 && (
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded bg-gray-200 text-gray-600">
+                              +{product.variants.length - 3}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-gray-400">No variants</span>
                       )}
                     </div>
                   </td>
@@ -511,12 +716,6 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {error && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm">
-          {error}
-        </div>
-      )}
-
       {/* Pagination */}
       {products.length > 0 && (
         <div className="mt-6">
@@ -549,7 +748,7 @@ export default function ProductsPage() {
       {/* Add/Edit Product Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto" id="product-modal">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">
                 {editingProduct ? 'Edit Product' : 'Add New Product'}
@@ -563,6 +762,13 @@ export default function ProductsPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6">
+              {/* Error Display */}
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
+                  {error}
+                </div>
+              )}
+
               <div className="space-y-6">
                 {/* Basic Information */}
                 <div>
@@ -575,10 +781,23 @@ export default function ProductsPage() {
                       <input
                         type="text"
                         value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                        onChange={(e) => {
+                          setFormData({ ...formData, name: e.target.value });
+                          if (validationErrors.name) {
+                            setValidationErrors({ ...validationErrors, name: false });
+                            setError('');
+                          }
+                        }}
+                        className={`w-full px-4 py-2 border rounded-lg focus:outline-none ${
+                          validationErrors.name
+                            ? 'border-red-500 focus:border-red-500'
+                            : 'border-gray-300 focus:border-gray-900'
+                        }`}
                         required
                       />
+                      {validationErrors.name && (
+                        <p className="mt-1 text-sm text-red-600">Must be at least 3 characters</p>
+                      )}
                     </div>
 
                     <div className="md:col-span-2">
@@ -587,11 +806,24 @@ export default function ProductsPage() {
                       </label>
                       <textarea
                         value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                        onChange={(e) => {
+                          setFormData({ ...formData, description: e.target.value });
+                          if (validationErrors.description) {
+                            setValidationErrors({ ...validationErrors, description: false });
+                            setError('');
+                          }
+                        }}
+                        className={`w-full px-4 py-2 border rounded-lg focus:outline-none ${
+                          validationErrors.description
+                            ? 'border-red-500 focus:border-red-500'
+                            : 'border-gray-300 focus:border-gray-900'
+                        }`}
                         rows={3}
                         required
                       />
+                      {validationErrors.description && (
+                        <p className="mt-1 text-sm text-red-600">Must be at least 10 characters</p>
+                      )}
                     </div>
 
                     <div>
@@ -601,12 +833,26 @@ export default function ProductsPage() {
                       <input
                         type="text"
                         value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                        onChange={(e) => {
+                          setFormData({ ...formData, category: e.target.value });
+                          if (validationErrors.category) {
+                            setValidationErrors({ ...validationErrors, category: false });
+                            setError('');
+                          }
+                        }}
+                        className={`w-full px-4 py-2 border rounded-lg focus:outline-none ${
+                          validationErrors.category
+                            ? 'border-red-500 focus:border-red-500'
+                            : 'border-gray-300 focus:border-gray-900'
+                        }`}
                         placeholder="e.g., Fashion, Outerwear, Accessories"
                         required
                       />
-                      <p className="text-xs text-gray-500 mt-1">Enter any category name</p>
+                      {validationErrors.category ? (
+                        <p className="mt-1 text-sm text-red-600">Must be at least 3 characters</p>
+                      ) : (
+                        <p className="text-xs text-gray-500 mt-1">Enter any category name</p>
+                      )}
                     </div>
 
                     <div className="md:col-span-2">
@@ -695,15 +941,22 @@ export default function ProductsPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Stock *
+                        Stock (Legacy - use Variants below)
                       </label>
                       <input
                         type="number"
-                        value={formData.stock}
+                        value={formData.variants && formData.variants.length > 0
+                          ? formData.variants.reduce((sum, v) => sum + v.quantity, 0)
+                          : formData.stock}
+                        disabled={formData.variants && formData.variants.length > 0}
                         onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
-                        required
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        {formData.variants && formData.variants.length > 0
+                          ? "Stock is automatically calculated from variants"
+                          : "Add variants below for size-based inventory"}
+                      </p>
                     </div>
 
                     {/* Colors Section */}
@@ -771,57 +1024,84 @@ export default function ProductsPage() {
                       )}
                     </div>
 
-                    {/* Sizes Section */}
+                    {/* Variants Section - Size with Quantity */}
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Product Sizes
+                        Product Variants (Size & Quantity)
                       </label>
                       <div className="flex gap-2 mb-2">
                         <input
                           type="text"
-                          value={sizeInput}
-                          onChange={(e) => setSizeInput(e.target.value)}
-                          placeholder="Enter size (e.g., XS, S, M, L, XL)"
+                          value={variantSizeInput}
+                          onChange={(e) => setVariantSizeInput(e.target.value)}
+                          placeholder="Size (e.g., S, M, L, XL)"
                           className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          value={variantQuantityInput}
+                          onChange={(e) => setVariantQuantityInput(parseInt(e.target.value) || 0)}
+                          placeholder="Quantity"
+                          className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                         />
                         <button
                           type="button"
                           onClick={() => {
-                            if (sizeInput && !formData.sizes?.includes(sizeInput)) {
-                              setFormData({
-                                ...formData,
-                                sizes: [...(formData.sizes || []), sizeInput]
-                              });
-                              setSizeInput('');
+                            if (variantSizeInput && variantQuantityInput > 0) {
+                              const existingVariantIndex = formData.variants?.findIndex(v => v.size === variantSizeInput);
+                              if (existingVariantIndex !== undefined && existingVariantIndex >= 0) {
+                                // Update existing variant
+                                const updatedVariants = [...(formData.variants || [])];
+                                updatedVariants[existingVariantIndex] = { size: variantSizeInput, quantity: variantQuantityInput };
+                                setFormData({
+                                  ...formData,
+                                  variants: updatedVariants
+                                });
+                              } else {
+                                // Add new variant
+                                setFormData({
+                                  ...formData,
+                                  variants: [...(formData.variants || []), { size: variantSizeInput, quantity: variantQuantityInput }]
+                                });
+                              }
+                              setVariantSizeInput('');
+                              setVariantQuantityInput(0);
                             }
                           }}
-                          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors whitespace-nowrap"
                         >
-                          Add Size
+                          Add Variant
                         </button>
                       </div>
-                      {formData.sizes && formData.sizes.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {formData.sizes.map((size, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-lg border border-gray-300"
-                            >
-                              <span className="text-sm text-gray-700">{size}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setFormData({
-                                    ...formData,
-                                    sizes: formData.sizes?.filter((_, i) => i !== index)
-                                  });
-                                }}
-                                className="text-red-600 hover:text-red-800"
+                      {formData.variants && formData.variants.length > 0 && (
+                        <div>
+                          <p className="text-xs text-gray-600 mb-2">
+                            Total Stock: {formData.variants.reduce((sum, v) => sum + v.quantity, 0)} units
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {formData.variants.map((variant, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg border border-gray-300"
                               >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
+                                <span className="text-sm font-semibold text-gray-900">{variant.size}</span>
+                                <span className="text-sm text-gray-600">({variant.quantity} units)</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData({
+                                      ...formData,
+                                      variants: formData.variants?.filter((_, i) => i !== index)
+                                    });
+                                  }}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1025,18 +1305,55 @@ export default function ProductsPage() {
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={loading}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                  disabled={loading}
+                  className="px-6 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {editingProduct ? 'Update Product' : 'Add Product'}
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>{editingProduct ? 'Updating...' : 'Adding...'}</span>
+                    </>
+                  ) : (
+                    <span>{editingProduct ? 'Update Product' : 'Add Product'}</span>
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">
+              {confirmModal.title}
+            </h3>
+            <p className="text-gray-600 mb-6">
+              {confirmModal.message}
+            </p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
           </div>
         </div>
       )}

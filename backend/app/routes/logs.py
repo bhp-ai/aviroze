@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import List, Optional
 from datetime import datetime, timedelta
 from app.database import get_db
-from app.db_models import OrderLog, UserActivityLog, User, Order
+from app.db_models import OrderLog, UserActivityLog, APIRequestLog, User, Order
 from app.schemas.order_log import OrderLogCreate, OrderLogResponse, OrderLogStats
 from app.schemas.user_activity_log import UserActivityLogCreate, UserActivityLogResponse, UserActivityLogStats
+from app.schemas.api_request_log import APIRequestLogResponse, APIRequestLogStats
 from app.auth import get_current_admin_user
 
 router = APIRouter(prefix="/api/logs", tags=["Logs"])
@@ -142,6 +143,7 @@ async def get_activity_logs(
     activity_type: Optional[str] = Query(None),
     resource_type: Optional[str] = Query(None),
     ip_address: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     skip: int = Query(0, ge=0),
@@ -165,7 +167,16 @@ async def get_activity_logs(
     if resource_type:
         query = query.filter(UserActivityLog.resource_type == resource_type)
     if ip_address:
-        query = query.filter(UserActivityLog.ip_address == ip_address)
+        query = query.filter(UserActivityLog.ip_address.like(f"%{ip_address}%"))
+    if search:
+        # Search across username, activity type, description, and IP
+        search_filter = f"%{search}%"
+        query = query.filter(
+            (User.username.like(search_filter)) |
+            (UserActivityLog.activity_type.like(search_filter)) |
+            (UserActivityLog.description.like(search_filter)) |
+            (UserActivityLog.ip_address.like(search_filter))
+        )
     if start_date:
         query = query.filter(UserActivityLog.created_at >= start_date)
     if end_date:
@@ -184,11 +195,32 @@ async def get_activity_logs(
 @router.post("/activities", response_model=UserActivityLogResponse, status_code=status.HTTP_201_CREATED)
 async def create_activity_log(
     log_data: UserActivityLogCreate,
-    current_user: User = Depends(get_current_admin_user),
+    request: Request,
     db: Session = Depends(get_db)
 ):
-    """Create user activity log"""
+    """Create user activity log (public endpoint for client-side tracking)"""
+    from app.db_models import UserActivityType
+
+    # Get IP address from request
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent", None)
+
+    # Validate activity_type
+    valid_values = [member.value for member in UserActivityType]
+    if log_data.activity_type not in valid_values:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid activity type: {log_data.activity_type}. Valid values: {valid_values}"
+        )
+
     new_log = UserActivityLog(**{k: v for k, v in log_data.dict().items() if v is not None})
+
+    # Override IP and user agent from request if not provided
+    if not new_log.ip_address:
+        new_log.ip_address = ip_address
+    if not new_log.user_agent:
+        new_log.user_agent = user_agent
+
     db.add(new_log)
     db.commit()
     db.refresh(new_log)
@@ -243,4 +275,95 @@ async def get_activity_stats(
     return UserActivityLogStats(
         total_activities=total_activities, activities_by_type=activities_by_type,
         unique_users=unique_users, recent_activity_count=recent_activity
+    )
+
+# ==================== API REQUEST LOGS ====================
+
+@router.get("/api-requests", response_model=List[APIRequestLogResponse])
+async def get_api_request_logs(
+    user_id: Optional[int] = Query(None),
+    method: Optional[str] = Query(None),
+    path: Optional[str] = Query(None),
+    status_code: Optional[int] = Query(None),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, le=100),
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get API request logs with optimized pagination (max 100)"""
+    query = db.query(
+        APIRequestLog.id, APIRequestLog.user_id, APIRequestLog.method,
+        APIRequestLog.path, APIRequestLog.endpoint, APIRequestLog.status_code,
+        APIRequestLog.response_time, APIRequestLog.ip_address,
+        APIRequestLog.user_agent, APIRequestLog.query_params, APIRequestLog.created_at,
+        User.email.label('user_email'), User.username.label('user_username')
+    ).outerjoin(User, APIRequestLog.user_id == User.id)
+
+    if user_id:
+        query = query.filter(APIRequestLog.user_id == user_id)
+    if method:
+        query = query.filter(APIRequestLog.method == method)
+    if path:
+        query = query.filter(APIRequestLog.path.like(f"%{path}%"))
+    if status_code:
+        query = query.filter(APIRequestLog.status_code == status_code)
+    if start_date:
+        query = query.filter(APIRequestLog.created_at >= start_date)
+    if end_date:
+        query = query.filter(APIRequestLog.created_at <= end_date)
+
+    results = query.order_by(desc(APIRequestLog.created_at)).offset(skip).limit(limit).all()
+
+    return [APIRequestLogResponse(
+        id=r.id, user_id=r.user_id, method=r.method,
+        path=r.path, endpoint=r.endpoint, status_code=r.status_code,
+        response_time=r.response_time, ip_address=r.ip_address,
+        user_agent=r.user_agent, query_params=r.query_params,
+        created_at=r.created_at, user_email=r.user_email, user_username=r.user_username
+    ) for r in results]
+
+@router.delete("/api-requests/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_api_request_log(
+    log_id: int,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Delete API request log (system admin only)"""
+    if current_user.email != "admin@admin.com":
+        raise HTTPException(status_code=403, detail="System admin only")
+
+    log = db.query(APIRequestLog).filter(APIRequestLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found")
+
+    db.delete(log)
+    db.commit()
+
+@router.get("/api-requests/stats", response_model=APIRequestLogStats)
+async def get_api_request_stats(
+    days: int = Query(30, ge=1, le=365),
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get API request statistics"""
+    start_date = datetime.utcnow() - timedelta(days=days)
+    total_requests = db.query(func.count(APIRequestLog.id)).scalar() or 0
+
+    method_counts = db.query(APIRequestLog.method, func.count(APIRequestLog.id)).group_by(APIRequestLog.method).all()
+    requests_by_method = {str(m): c for m, c in method_counts}
+
+    status_counts = db.query(APIRequestLog.status_code, func.count(APIRequestLog.id)).group_by(APIRequestLog.status_code).all()
+    requests_by_status = {str(s): c for s, c in status_counts}
+
+    avg_response_time = db.query(func.avg(APIRequestLog.response_time)).scalar() or 0.0
+    recent_requests = db.query(func.count(APIRequestLog.id)).filter(APIRequestLog.created_at >= start_date).scalar() or 0
+
+    return APIRequestLogStats(
+        total_requests=total_requests,
+        requests_by_method=requests_by_method,
+        requests_by_status=requests_by_status,
+        avg_response_time=float(avg_response_time),
+        recent_requests_count=recent_requests
     )

@@ -1,17 +1,34 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import ProductCard from '@/components/ProductCard';
 import { productsService, Product } from '@/lib/services/products';
-import { Search } from 'lucide-react';
+import { Search, Loader2 } from 'lucide-react';
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const searchParams = useSearchParams();
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const observerTarget = useRef<HTMLDivElement>(null);
+
+  const ITEMS_PER_PAGE = 10;
+
+  // Read category from URL on mount
+  useEffect(() => {
+    const categoryFromUrl = searchParams.get('category');
+    if (categoryFromUrl) {
+      setSelectedCategories([categoryFromUrl]);
+    }
+  }, [searchParams]);
 
   // Fetch categories on mount
   useEffect(() => {
@@ -32,12 +49,24 @@ export default function ProductsPage() {
       try {
         setLoading(true);
         setError('');
-        const params: any = {};
-        if (selectedCategory) params.category = selectedCategory;
-        if (searchQuery) params.search = searchQuery;
+        setPage(1);
 
+        // Fetch all products first
+        const params: any = {};
+        if (searchQuery) params.search = searchQuery;
         const data = await productsService.getAll(params);
-        setProducts(data);
+
+        // Filter by multiple categories on client side
+        let filteredProducts = data;
+        if (selectedCategories.length > 0) {
+          filteredProducts = data.filter(product =>
+            selectedCategories.includes(product.category)
+          );
+        }
+
+        setAllProducts(filteredProducts);
+        setDisplayedProducts(filteredProducts.slice(0, ITEMS_PER_PAGE));
+        setHasMore(filteredProducts.length > ITEMS_PER_PAGE);
       } catch (err) {
         console.error('Failed to fetch products:', err);
         setError('Failed to load products');
@@ -47,10 +76,55 @@ export default function ProductsPage() {
     };
 
     fetchProducts();
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategories, searchQuery]);
+
+  // Load more products when page changes
+  useEffect(() => {
+    if (page === 1) return; // Skip initial load
+
+    setLoadingMore(true);
+    const startIndex = 0;
+    const endIndex = page * ITEMS_PER_PAGE;
+    const newProducts = allProducts.slice(startIndex, endIndex);
+
+    setDisplayedProducts(newProducts);
+    setHasMore(endIndex < allProducts.length);
+    setLoadingMore(false);
+  }, [page, allProducts]);
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          setPage((prev) => prev + 1);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [hasMore, loadingMore, loading]);
 
   const handleCategoryChange = (category: string) => {
-    setSelectedCategory(category === selectedCategory ? '' : category);
+    setSelectedCategories(prev => {
+      if (prev.includes(category)) {
+        // Remove category if already selected
+        return prev.filter(c => c !== category);
+      } else {
+        // Add category to selection
+        return [...prev, category];
+      }
+    });
   };
 
   return (
@@ -82,9 +156,9 @@ export default function ProductsPage() {
       <div className="mb-8 pb-4 border-b border-gray-200">
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => setSelectedCategory('')}
+            onClick={() => setSelectedCategories([])}
             className={`px-4 py-2 text-sm rounded-full transition-colors ${
-              selectedCategory === ''
+              selectedCategories.length === 0
                 ? 'bg-black text-white'
                 : 'border border-gray-300 hover:border-gray-900'
             }`}
@@ -96,7 +170,7 @@ export default function ProductsPage() {
               key={category}
               onClick={() => handleCategoryChange(category)}
               className={`px-4 py-2 text-sm rounded-full transition-colors ${
-                selectedCategory === category
+                selectedCategories.includes(category)
                   ? 'bg-black text-white'
                   : 'border border-gray-300 hover:border-gray-900'
               }`}
@@ -125,19 +199,36 @@ export default function ProductsPage() {
             </div>
           ))}
         </div>
-      ) : products.length > 0 ? (
+      ) : displayedProducts.length > 0 ? (
         <>
           {/* Results Count */}
           <div className="mb-4 text-sm text-gray-600">
-            Showing {products.length} {products.length === 1 ? 'product' : 'products'}
+            Showing {displayedProducts.length} of {allProducts.length} {allProducts.length === 1 ? 'product' : 'products'}
           </div>
 
           {/* Product Grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {products.map((product) => (
+            {displayedProducts.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
+
+          {/* Intersection Observer Target */}
+          <div ref={observerTarget} className="h-20 flex items-center justify-center mt-8">
+            {loadingMore && hasMore && (
+              <div className="flex items-center gap-2 text-gray-500">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Loading more products...</span>
+              </div>
+            )}
+          </div>
+
+          {/* End of Results */}
+          {!hasMore && displayedProducts.length > 0 && (
+            <div className="text-center py-8 text-gray-500 text-sm">
+              You've reached the end of the list
+            </div>
+          )}
         </>
       ) : (
         <div className="text-center py-16">

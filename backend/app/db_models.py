@@ -30,15 +30,24 @@ class UserActivityType(str, enum.Enum):
     PASSWORD_CHANGE = "password_change"
     PROFILE_UPDATE = "profile_update"
     PRODUCT_VIEW = "product_view"
+    PRODUCT_CREATE = "product_create"
+    PRODUCT_UPDATE = "product_update"
+    PRODUCT_DELETE = "product_delete"
     CART_ADD = "cart_add"
     CART_REMOVE = "cart_remove"
+    CART_VIEW = "cart_view"
     CHECKOUT_START = "checkout_start"
     CHECKOUT_COMPLETE = "checkout_complete"
+    ORDER_VIEW = "order_view"
+    ORDER_CREATE = "order_create"
+    ORDER_UPDATE = "order_update"
     SEARCH = "search"
     FILTER = "filter"
     COMMENT_CREATE = "comment_create"
     COMMENT_UPDATE = "comment_update"
     COMMENT_DELETE = "comment_delete"
+    ADMIN_ACTION = "admin_action"
+    PAGE_VIEW = "page_view"
 
 # Removed ProductCategory enum to allow flexible categories
 # class ProductCategory(str, enum.Enum):
@@ -105,6 +114,7 @@ class Product(Base):
     # Relationships
     comments = relationship("ProductComment", back_populates="product", cascade="all, delete-orphan")
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan", order_by="ProductImage.display_order")
+    variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
 
 # Product Image Model
 class ProductImage(Base):
@@ -119,6 +129,20 @@ class ProductImage(Base):
 
     # Relationships
     product = relationship("Product", back_populates="images")
+
+# Product Variant Model - For size-based inventory
+class ProductVariant(Base):
+    __tablename__ = "product_variants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey('products.id', ondelete='CASCADE'), nullable=False, index=True)
+    size = Column(String(50), nullable=False)
+    quantity = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    product = relationship("Product", back_populates="variants")
 
 # Product Comment Model
 class ProductComment(Base):
@@ -211,7 +235,7 @@ class UserActivityLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True, index=True)  # Null for anonymous activities
-    activity_type = Column(Enum(UserActivityType), nullable=False, index=True)
+    activity_type = Column(String(50), nullable=False, index=True)  # Changed from Enum to String to avoid conversion issues
 
     # Activity details
     resource_type = Column(String(50), nullable=True, index=True)  # e.g., 'product', 'order', 'comment'
@@ -224,6 +248,32 @@ class UserActivityLog(Base):
     # Additional data
     details = Column(JSON, nullable=True)  # Flexible data storage
     description = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    # Relationships
+    user = relationship("User")
+
+# API Request Log Model - For tracking all API requests (separate from user activities)
+class APIRequestLog(Base):
+    __tablename__ = "api_request_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    # Request details
+    method = Column(String(10), nullable=False, index=True)  # GET, POST, PUT, DELETE, etc.
+    path = Column(String(500), nullable=False, index=True)  # /api/products, /api/orders, etc.
+    endpoint = Column(String(500), nullable=True)  # Specific endpoint name
+
+    # Response details
+    status_code = Column(Integer, nullable=True, index=True)  # 200, 404, 500, etc.
+    response_time = Column(Float, nullable=True)  # Response time in seconds
+
+    # Request metadata
+    ip_address = Column(String(45), nullable=True, index=True)
+    user_agent = Column(String(500), nullable=True)
+    query_params = Column(JSON, nullable=True)  # Query parameters
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 

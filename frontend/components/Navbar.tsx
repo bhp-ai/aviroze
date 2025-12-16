@@ -1,19 +1,27 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShoppingBag, Menu, X, Search, User, LogOut, Package } from 'lucide-react';
+import { ShoppingBag, Menu, X, Search, User, LogOut, Package, ArrowRight } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { authService } from '@/lib/services/auth';
+import { productsService, Product } from '@/lib/services/products';
+import { formatIDR, calculateDiscountedPrice } from '@/lib/utils/currency';
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [user, setUser] = useState<{ username: string; role: string } | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
   const router = useRouter();
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
   const { getCartCount } = useCart();
 
   useEffect(() => {
@@ -47,21 +55,63 @@ export default function Navbar() {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setIsUserMenuOpen(false);
       }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowResults(false);
+      }
     };
 
-    if (isUserMenuOpen) {
+    if (isUserMenuOpen || showResults) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isUserMenuOpen]);
+  }, [isUserMenuOpen, showResults]);
+
+  // Search products with debounce
+  useEffect(() => {
+    const searchProducts = async () => {
+      if (searchQuery.trim().length < 2) {
+        setSearchResults([]);
+        setShowResults(false);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const results = await productsService.getAll({ search: searchQuery });
+        setSearchResults(results.slice(0, 5)); // Limit to 5 results
+        setShowResults(true);
+      } catch (error) {
+        console.error('Search failed:', error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    const timeoutId = setTimeout(searchProducts, 300); // Debounce 300ms
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
 
   const handleLogout = () => {
     authService.logout();
     setUser(null);
     setIsUserMenuOpen(false);
+  };
+
+  const handleViewAll = () => {
+    router.push(`/products?search=${encodeURIComponent(searchQuery)}`);
+    setShowResults(false);
+    setIsSearchOpen(false);
+  };
+
+  const handleProductClick = () => {
+    setShowResults(false);
+    setIsSearchOpen(false);
+    setSearchQuery('');
   };
 
   return (
@@ -171,15 +221,17 @@ export default function Navbar() {
 
         {/* Search Bar */}
         <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out ${
-            isSearchOpen ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'
+          className={`overflow-visible transition-all duration-300 ease-in-out ${
+            isSearchOpen ? 'max-h-[500px] opacity-100 pointer-events-auto' : 'max-h-0 opacity-0 pointer-events-none'
           }`}
         >
-          <div className="py-4">
+          <div className="py-4 relative" ref={searchRef}>
             <div className="relative">
               <input
                 type="text"
                 placeholder="Search for products..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full px-4 py-3 pr-12 border border-border focus:outline-none focus:border-foreground transition-colors text-sm"
                 autoFocus={isSearchOpen}
               />
@@ -187,6 +239,84 @@ export default function Navbar() {
                 <Search className="w-5 h-5 text-foreground/40" />
               </button>
             </div>
+
+            {/* Search Results Dropdown */}
+            {showResults && searchQuery.length >= 2 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-background border border-border shadow-lg max-h-96 overflow-y-auto z-50">
+                {isSearching ? (
+                  <div className="p-4 text-center text-sm text-foreground/60">
+                    Searching...
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <>
+                    {searchResults.map((product) => {
+                      const discountedPrice = calculateDiscountedPrice(product.price, product.discount);
+                      return (
+                        <Link
+                          key={product.id}
+                          href={`/products/${product.id}`}
+                          onClick={handleProductClick}
+                          className="flex items-center gap-3 p-3 hover:bg-foreground/5 transition-colors border-b border-border last:border-b-0"
+                        >
+                          {/* Product Image */}
+                          <div className="relative w-16 h-16 flex-shrink-0 bg-gray-100">
+                            {product.images && product.images.length > 0 ? (
+                              <Image
+                                src={product.images[0]}
+                                alt={product.name}
+                                fill
+                                className="object-cover"
+                                sizes="64px"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                <Package className="w-6 h-6" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Product Info */}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-medium text-foreground truncate">
+                              {product.name}
+                            </h4>
+                            <div className="flex items-center gap-2 mt-1">
+                              {discountedPrice ? (
+                                <>
+                                  <span className="text-sm font-semibold text-red-600">
+                                    IDR {formatIDR(discountedPrice)}
+                                  </span>
+                                  <span className="text-xs text-gray-400 line-through">
+                                    IDR {formatIDR(product.price)}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-sm text-foreground/80">
+                                  IDR {formatIDR(product.price)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </Link>
+                      );
+                    })}
+
+                    {/* View All Button */}
+                    <button
+                      onClick={handleViewAll}
+                      className="w-full p-3 text-sm font-medium text-foreground hover:bg-foreground/5 transition-colors flex items-center justify-center gap-2 border-t border-border"
+                    >
+                      <span>View all results for "{searchQuery}"</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="p-4 text-center text-sm text-foreground/60">
+                    No products found for "{searchQuery}"
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

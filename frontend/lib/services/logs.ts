@@ -65,6 +65,43 @@ export interface UserActivityLogFilters {
   activity_type?: string;
   resource_type?: string;
   ip_address?: string;
+  search?: string;
+  start_date?: string;
+  end_date?: string;
+  skip?: number;
+  limit?: number;
+}
+
+// API Request Logs
+export interface APIRequestLog {
+  id: number;
+  user_id: number | null;
+  method: string;
+  path: string;
+  endpoint: string | null;
+  status_code: number | null;
+  response_time: number | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  query_params: Record<string, any> | null;
+  created_at: string;
+  user_email: string | null;
+  user_username: string | null;
+}
+
+export interface APIRequestLogStats {
+  total_requests: number;
+  requests_by_method: Record<string, number>;
+  requests_by_status: Record<string, number>;
+  avg_response_time: number;
+  recent_requests_count: number;
+}
+
+export interface APIRequestLogFilters {
+  user_id?: number;
+  method?: string;
+  path?: string;
+  status_code?: number;
   start_date?: string;
   end_date?: string;
   skip?: number;
@@ -92,6 +129,18 @@ export const logsService = {
 
     async getStats(days: number = 30): Promise<UserActivityLogStats> {
       const response = await apiClient.get<UserActivityLogStats>('/api/logs/activities/stats', { params: { days } });
+      return response.data;
+    },
+  },
+
+  apiRequests: {
+    async getAll(filters?: APIRequestLogFilters): Promise<APIRequestLog[]> {
+      const response = await apiClient.get<APIRequestLog[]>('/api/logs/api-requests', { params: filters });
+      return response.data;
+    },
+
+    async getStats(days: number = 30): Promise<APIRequestLogStats> {
+      const response = await apiClient.get<APIRequestLogStats>('/api/logs/api-requests/stats', { params: { days } });
       return response.data;
     },
   },

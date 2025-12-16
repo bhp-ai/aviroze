@@ -100,6 +100,15 @@ export default function ProductCard({ product }: ProductCardProps) {
       {/* Product Info */}
       <Link href={productLink}>
         <div className="space-y-1">
+          {/* Category Badge */}
+          {isApi && 'category' in product && (
+            <div className="mb-1">
+              <span className="inline-block px-2 py-0.5 text-xs font-medium text-gray-600 bg-gray-100 rounded">
+                {product.category}
+              </span>
+            </div>
+          )}
+
           <h3 className="text-sm font-medium text-gray-900 group-hover:underline">
             {product.name}
           </h3>

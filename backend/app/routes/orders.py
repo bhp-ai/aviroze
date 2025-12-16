@@ -142,7 +142,7 @@ async def stripe_webhook(
             # Log user activity
             log_user_activity(
                 db=db,
-                activity_type=UserActivityType.CHECKOUT_COMPLETE,
+                activity_type=UserActivityType.CHECKOUT_COMPLETE.value,
                 user_id=int(user_id),
                 resource_type="order",
                 resource_id=new_order.id,

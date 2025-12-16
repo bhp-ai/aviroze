@@ -49,7 +49,7 @@ async def register(
     # Log user registration
     log_user_activity(
         db=db,
-        activity_type=UserActivityType.REGISTER,
+        activity_type=UserActivityType.REGISTER.value,
         user_id=new_user.id,
         description=f"User {new_user.username} registered",
         request=request
@@ -87,7 +87,7 @@ async def login(
     # Log user login
     log_user_activity(
         db=db,
-        activity_type=UserActivityType.LOGIN,
+        activity_type=UserActivityType.LOGIN.value,
         user_id=user.id,
         description=f"User {user.username} logged in",
         request=request

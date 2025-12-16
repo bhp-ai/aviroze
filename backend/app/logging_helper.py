@@ -38,7 +38,7 @@ def log_order_event(
 
 def log_user_activity(
     db: Session,
-    activity_type: UserActivityType,
+    activity_type: str,  # Accept string (lowercase enum value)
     user_id: Optional[int] = None,
     resource_type: Optional[str] = None,
     resource_id: Optional[int] = None,
@@ -70,9 +70,17 @@ def log_user_activity(
             if request.url.query:
                 details["query_params"] = request.url.query
 
+        # Validate that activity_type is a valid enum value
+        valid_values = [member.value for member in UserActivityType]
+        if activity_type not in valid_values:
+            print(f"Warning: Unknown activity type '{activity_type}'")
+            print(f"Valid values: {valid_values}")
+            # Don't save invalid activity types
+            return
+
         log = UserActivityLog(
             user_id=user_id,
-            activity_type=activity_type,
+            activity_type=activity_type,  # Pass string directly, not enum
             resource_type=resource_type,
             resource_id=resource_id,
             description=description,
@@ -84,4 +92,5 @@ def log_user_activity(
         db.commit()
     except Exception as e:
         print(f"Failed to log user activity: {e}")
+        print(f"Activity type was: {activity_type}")
         db.rollback()

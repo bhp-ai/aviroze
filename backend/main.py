@@ -5,6 +5,7 @@ from app.routes.logs import router as logs_router
 from app.database import engine, Base, SessionLocal
 from app.db_models import User, UserRole, UserStatus
 from app.auth import get_password_hash
+from app.middleware import LoggingMiddleware, APILoggingMiddleware
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -71,6 +72,12 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Add logging middlewares
+# APILoggingMiddleware - Logs all API requests (performance, errors, usage)
+app.add_middleware(APILoggingMiddleware)
+# LoggingMiddleware - Logs user activities and page visits
+app.add_middleware(LoggingMiddleware)
 
 # Include routers
 app.include_router(auth_router)

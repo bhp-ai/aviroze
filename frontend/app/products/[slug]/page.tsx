@@ -74,11 +74,29 @@ export default function ProductDetailPage() {
   const handleAddToCart = () => {
     if (!product || product.stock === 0) return;
 
+    // Check if user is logged in FIRST
+    if (!currentUser) {
+      toast.warning('Please login to add items to cart');
+      return;
+    }
+
+    // Check if color is required and not selected
+    if (product.colors && product.colors.length > 0 && !selectedColor) {
+      toast.error('Please select a color');
+      return;
+    }
+
+    // Check if size is required and not selected
+    if (product.sizes && product.sizes.length > 0 && !selectedSize) {
+      toast.error('Please select a size');
+      return;
+    }
+
     setAddingToCart(true);
-    const result = addToCart(product, quantity, undefined, selectedColor || undefined);
+    const result = addToCart(product, quantity, selectedSize || undefined, selectedColor || undefined);
 
     if (result === false) {
-      // User not logged in
+      // User not logged in (backup check)
       toast.warning('Please login to add items to cart');
       setAddingToCart(false);
     } else {
@@ -186,14 +204,24 @@ export default function ProductDetailPage() {
   const discountPercentage = product.discount?.enabled && product.discount?.type === 'percentage' ? product.discount.value : null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 pt-8">
       {/* Breadcrumb */}
-      <nav className="mb-8 text-sm text-gray-600">
-        <Link href="/" className="hover:text-gray-900">Home</Link>
-        <span className="mx-2">/</span>
-        <Link href="/products" className="hover:text-gray-900">Products</Link>
-        <span className="mx-2">/</span>
-        <span className="text-gray-900">{product.name}</span>
+      <nav className="mb-8 text-sm">
+        <a
+          href="/"
+          className="text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          Home
+        </a>
+        <span className="mx-2 text-gray-400">/</span>
+        <a
+          href="/products"
+          className="text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          Products
+        </a>
+        <span className="mx-2 text-gray-400">/</span>
+        <span className="text-gray-900 font-medium">{product.name}</span>
       </nav>
 
       <div className="grid md:grid-cols-2 gap-12 mb-12">
@@ -292,13 +320,17 @@ export default function ProductDetailPage() {
                   <button
                     key={index}
                     onClick={() => setSelectedColor(color)}
-                    className={`px-6 py-2 border transition-all text-sm ${
+                    className={`flex items-center gap-2 px-4 py-2 border transition-all text-sm ${
                       selectedColor === color
                         ? 'border-foreground bg-foreground/5'
                         : 'border-border hover:border-foreground/50'
                     }`}
                   >
-                    {color}
+                    <div
+                      className="w-5 h-5 rounded-full border-2 border-gray-300"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span>{color}</span>
                   </button>
                 ))}
               </div>
@@ -395,14 +427,27 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Product Details */}
-          <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-2">
+          <div className="border-t border-border pt-6 mt-8">
+            <h3 className="text-sm uppercase tracking-widest text-gray-600 mb-4">
               Product Details
             </h3>
-            <ul className="text-sm text-gray-600 space-y-1">
-              <li>Category: {product.category}</li>
-              <li>Stock: {product.stock} available</li>
-            </ul>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-500 min-w-[80px]">Category:</span>
+                <Link
+                  href={`/products?category=${encodeURIComponent(product.category)}`}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-foreground hover:border-foreground hover:bg-foreground/5 transition-all font-medium"
+                >
+                  {product.category}
+                </Link>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-500 min-w-[80px]">Stock:</span>
+                <span className={`font-medium ${product.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {product.stock > 0 ? `${product.stock} available` : 'Out of stock'}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
