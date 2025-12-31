@@ -2,11 +2,48 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
-from app.db_models import ProductComment, Product, User
+from app.db_models import ProductComment, Product, User, Order, OrderItem
 from app.schemas.comment import CommentCreate, CommentUpdate, CommentResponse, CommentWithProduct
 from app.auth import get_current_user, get_current_admin_user
 
 router = APIRouter(prefix="/api/comments", tags=["Comments"])
+
+@router.get("/eligible-purchases/{product_id}")
+async def get_eligible_purchases(
+    product_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all eligible purchases for reviewing a specific product"""
+    # Get all completed/delivered orders for this user containing this product
+    orders = db.query(Order).filter(
+        Order.user_id == current_user.id,
+        Order.status.in_(['completed', 'delivered'])
+    ).all()
+
+    eligible_purchases = []
+    for order in orders:
+        # Check if this order contains the product
+        order_item = db.query(OrderItem).filter(
+            OrderItem.order_id == order.id,
+            OrderItem.product_id == product_id
+        ).first()
+
+        if order_item:
+            # Check if user already reviewed this order+product combination
+            existing_review = db.query(ProductComment).filter(
+                ProductComment.user_id == current_user.id,
+                ProductComment.product_id == product_id,
+                ProductComment.order_id == order.id
+            ).first()
+
+            eligible_purchases.append({
+                "order_id": order.id,
+                "purchase_date": order.created_at,
+                "has_reviewed": existing_review is not None
+            })
+
+    return eligible_purchases
 
 @router.get("/", response_model=List[CommentResponse])
 async def get_comments(
@@ -27,16 +64,25 @@ async def get_comments(
     result = []
     for comment in comments:
         user = db.query(User).filter(User.id == comment.user_id).first()
+        order = None
+        purchase_date = None
+        if comment.order_id:
+            order = db.query(Order).filter(Order.id == comment.order_id).first()
+            if order:
+                purchase_date = order.created_at
+
         comment_dict = {
             "id": comment.id,
             "product_id": comment.product_id,
             "user_id": comment.user_id,
+            "order_id": comment.order_id,
             "username": user.username if user else "Unknown",
             "user_email": user.email if user else "unknown@example.com",
             "rating": comment.rating,
             "comment": comment.comment,
             "created_at": comment.created_at,
-            "updated_at": comment.updated_at
+            "updated_at": comment.updated_at,
+            "purchase_date": purchase_date
         }
         result.append(comment_dict)
 
@@ -126,9 +172,58 @@ async def create_comment(
             detail="Rating must be between 1 and 5"
         )
 
+    # If order_id is provided, verify it belongs to user and contains the product
+    purchase_date = None
+    if comment_data.order_id:
+        order = db.query(Order).filter(
+            Order.id == comment_data.order_id,
+            Order.user_id == current_user.id
+        ).first()
+
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Order not found or does not belong to you"
+            )
+
+        # Check if order status is completed/delivered
+        if order.status.lower() not in ['completed', 'delivered']:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Can only review products from completed orders"
+            )
+
+        # Verify product is in the order
+        order_item = db.query(OrderItem).filter(
+            OrderItem.order_id == comment_data.order_id,
+            OrderItem.product_id == comment_data.product_id
+        ).first()
+
+        if not order_item:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Product not found in this order"
+            )
+
+        # Check if user already reviewed this order+product combination
+        existing_review = db.query(ProductComment).filter(
+            ProductComment.user_id == current_user.id,
+            ProductComment.product_id == comment_data.product_id,
+            ProductComment.order_id == comment_data.order_id
+        ).first()
+
+        if existing_review:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You have already reviewed this product for this purchase"
+            )
+
+        purchase_date = order.created_at
+
     new_comment = ProductComment(
         product_id=comment_data.product_id,
         user_id=current_user.id,
+        order_id=comment_data.order_id,
         rating=comment_data.rating,
         comment=comment_data.comment
     )
@@ -141,12 +236,14 @@ async def create_comment(
         "id": new_comment.id,
         "product_id": new_comment.product_id,
         "user_id": new_comment.user_id,
+        "order_id": new_comment.order_id,
         "username": current_user.username,
         "user_email": current_user.email,
         "rating": new_comment.rating,
         "comment": new_comment.comment,
         "created_at": new_comment.created_at,
-        "updated_at": new_comment.updated_at
+        "updated_at": new_comment.updated_at,
+        "purchase_date": purchase_date
     }
 
     return comment_dict

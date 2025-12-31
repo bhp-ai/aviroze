@@ -64,7 +64,6 @@ export default function LogsPage() {
       const stats = await logsService.orders.getStats(30);
       setOrderStats(stats);
     } catch (err) {
-      console.error(err);
     }
   };
 
@@ -94,7 +93,6 @@ export default function LogsPage() {
       const stats = await logsService.activities.getStats(30);
       setActivityStats(stats);
     } catch (err) {
-      console.error(err);
     }
   };
 
@@ -116,7 +114,6 @@ export default function LogsPage() {
       const stats = await logsService.apiRequests.getStats(30);
       setApiStats(stats);
     } catch (err) {
-      console.error(err);
     }
   };
 

@@ -39,7 +39,6 @@ export default function OrdersPage() {
       const data = await ordersService.getMyOrders();
       setOrders(data);
     } catch (error) {
-      console.error('Failed to load orders:', error);
       showToast(
         error instanceof Error ? error.message : 'Failed to load orders',
         'error'

@@ -171,13 +171,20 @@ async def get_my_orders(
         for item in order.items:
             # Get first image if available
             image_url = None
-            if item.product and item.product.images:
-                from base64 import b64encode
-                img = item.product.images[0]
-                image_url = f"data:{img.image_mimetype};base64,{b64encode(img.image).decode('utf-8')}"
-            elif item.product and item.product.image:
-                from base64 import b64encode
-                image_url = f"data:{item.product.image_mimetype or 'image/jpeg'};base64,{b64encode(item.product.image).decode('utf-8')}"
+            if item.product:
+                # Try to get first image type (not video/gif)
+                if item.product.images:
+                    from base64 import b64encode
+                    # Find first image type
+                    image_media = next((img for img in item.product.images if img.media_type == 'image'), None)
+                    if not image_media:
+                        # Fallback to first media
+                        image_media = item.product.images[0]
+                    if image_media:
+                        image_url = f"data:{image_media.image_mimetype};base64,{b64encode(image_media.image).decode('utf-8')}"
+                elif item.product.image:
+                    from base64 import b64encode
+                    image_url = f"data:{item.product.image_mimetype or 'image/jpeg'};base64,{b64encode(item.product.image).decode('utf-8')}"
 
             order_items.append(OrderItemResponse(
                 id=item.id,
@@ -229,13 +236,20 @@ async def get_order(
     order_items = []
     for item in order.items:
         image_url = None
-        if item.product and item.product.images:
-            from base64 import b64encode
-            img = item.product.images[0]
-            image_url = f"data:{img.image_mimetype};base64,{b64encode(img.image).decode('utf-8')}"
-        elif item.product and item.product.image:
-            from base64 import b64encode
-            image_url = f"data:{item.product.image_mimetype or 'image/jpeg'};base64,{b64encode(item.product.image).decode('utf-8')}"
+        if item.product:
+            # Try to get first image type (not video/gif)
+            if item.product.images:
+                from base64 import b64encode
+                # Find first image type
+                image_media = next((img for img in item.product.images if img.media_type == 'image'), None)
+                if not image_media:
+                    # Fallback to first media
+                    image_media = item.product.images[0]
+                if image_media:
+                    image_url = f"data:{image_media.image_mimetype};base64,{b64encode(image_media.image).decode('utf-8')}"
+            elif item.product.image:
+                from base64 import b64encode
+                image_url = f"data:{item.product.image_mimetype or 'image/jpeg'};base64,{b64encode(item.product.image).decode('utf-8')}"
 
         order_items.append(OrderItemResponse(
             id=item.id,
@@ -284,13 +298,20 @@ async def get_all_orders(
         order_items = []
         for item in order.items:
             image_url = None
-            if item.product and item.product.images:
-                from base64 import b64encode
-                img = item.product.images[0]
-                image_url = f"data:{img.image_mimetype};base64,{b64encode(img.image).decode('utf-8')}"
-            elif item.product and item.product.image:
-                from base64 import b64encode
-                image_url = f"data:{item.product.image_mimetype or 'image/jpeg'};base64,{b64encode(item.product.image).decode('utf-8')}"
+            if item.product:
+                # Try to get first image type (not video/gif)
+                if item.product.images:
+                    from base64 import b64encode
+                    # Find first image type
+                    image_media = next((img for img in item.product.images if img.media_type == 'image'), None)
+                    if not image_media:
+                        # Fallback to first media
+                        image_media = item.product.images[0]
+                    if image_media:
+                        image_url = f"data:{image_media.image_mimetype};base64,{b64encode(image_media.image).decode('utf-8')}"
+                elif item.product.image:
+                    from base64 import b64encode
+                    image_url = f"data:{item.product.image_mimetype or 'image/jpeg'};base64,{b64encode(item.product.image).decode('utf-8')}"
 
             order_items.append(OrderItemResponse(
                 id=item.id,
@@ -349,13 +370,20 @@ async def update_order_status(
             # Prepare order items data for email
             order_items_data = []
             subtotal = 0
+            public_url = os.getenv("PUBLIC_URL", "")
             for item in order.items:
                 product = db.query(Product).filter(Product.id == item.product_id).first()
                 if product:
+                    # Only include image URL if PUBLIC_URL is set (not localhost)
+                    image_url = None
+                    if public_url:
+                        image_url = f"{public_url}/api/products/{product.id}/image"
+
                     order_items_data.append({
                         "product_name": product.name,
                         "quantity": item.quantity,
-                        "price": item.price
+                        "price": item.price,
+                        "product_image": image_url
                     })
                     subtotal += item.price * item.quantity
 
@@ -368,8 +396,14 @@ async def update_order_status(
                 "subtotal": subtotal,
                 "shipping": 50000,  # Standard shipping cost
                 "total": order.total_amount,
-                "tracking_number": order.notes if order.notes else ""  # Can store tracking in notes
+                "tracking_number": order.notes if order.notes else "",  # Can store tracking in notes
+                "shipping_address": order.shipping_address if order.shipping_address else "",
+                "payment_method": "Stripe (Credit Card)" if "stripe" in (order.payment_method or "").lower() else "Credit Card"
             }
+
+            print(f"[DEBUG] Email data items count: {len(order_items_data)}")
+            print(f"[DEBUG] Shipping address: {order.shipping_address}")
+            print(f"[DEBUG] Order items: {order.items}")
 
             email_service.send_status_update_email(email_data, status_update.status.value)
             print(f"[EMAIL] Status update email sent to {user.email} for order #{order.id} - Status: {status_update.status.value}")

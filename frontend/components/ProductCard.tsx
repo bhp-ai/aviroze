@@ -1,12 +1,15 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Product as OldProduct } from '@/types';
 import { Product as ApiProduct } from '@/lib/services/products';
 import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/contexts/ToastContext';
-import { ShoppingCart } from 'lucide-react';
+import { wishlistService } from '@/lib/services/wishlist';
+import { authService } from '@/lib/services/auth';
+import { ShoppingCart, Heart } from 'lucide-react';
 import { formatIDR, calculateDiscountedPrice } from '@/lib/utils/currency';
 
 interface ProductCardProps {
@@ -23,8 +26,47 @@ export default function ProductCard({ product }: ProductCardProps) {
   const { addToCart } = useCart();
   const toast = useToast();
 
+  const [isInWishlist, setIsInWishlist] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+
+  useEffect(() => {
+    checkWishlistStatus();
+  }, []);
+
+  const checkWishlistStatus = async () => {
+    if (!isApi || !authService.isAuthenticated()) {
+      setIsInWishlist(false);
+      return;
+    }
+
+    try {
+      const inWishlist = await wishlistService.check(product.id);
+      setIsInWishlist(inWishlist);
+    } catch (error) {
+      setIsInWishlist(false);
+    }
+  };
+
+  // Get the first IMAGE (not video or gif) for product listing
   const productImage = isApi
-    ? (product.images && product.images.length > 0 ? product.images[0] : 'https://via.placeholder.com/400x600?text=No+Image')
+    ? (() => {
+        if (!product.images || product.images.length === 0) {
+          return 'https://via.placeholder.com/400x600?text=No+Image';
+        }
+
+        // Filter to only get images (not videos or gifs)
+        const imageOnly = product.images.find(img => {
+          if (typeof img === 'string') return true; // Old format
+          return img.media_type === 'image'; // Only show images
+        });
+
+        if (imageOnly) {
+          return typeof imageOnly === 'string' ? imageOnly : imageOnly.url;
+        }
+
+        // Fallback: if no images found, show the first item anyway
+        return typeof product.images[0] === 'string' ? product.images[0] : product.images[0].url;
+      })()
     : product.images[0];
 
   const productLink = isApi
@@ -52,6 +94,36 @@ export default function ProductCard({ product }: ProductCardProps) {
     }
   };
 
+  const handleWishlistToggle = async (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent navigation
+    e.stopPropagation(); // Prevent event bubbling
+
+    if (!isApi) return;
+
+    if (!authService.isAuthenticated()) {
+      toast.warning('Please login to add items to wishlist');
+      return;
+    }
+
+    try {
+      setWishlistLoading(true);
+
+      if (isInWishlist) {
+        await wishlistService.remove(product.id);
+        setIsInWishlist(false);
+        toast.success('Removed from wishlist');
+      } else {
+        await wishlistService.add(product.id);
+        setIsInWishlist(true);
+        toast.success('Added to wishlist');
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to update wishlist');
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
   const apiDiscount = isApi && 'discount' in product ? product.discount : undefined;
   const discountedPrice = calculateDiscountedPrice(product.price, apiDiscount);
   const discountPercentage = apiDiscount?.enabled && apiDiscount?.type === 'percentage' ? apiDiscount.value : null;
@@ -75,6 +147,22 @@ export default function ProductCard({ product }: ProductCardProps) {
           <div className="absolute top-3 left-3 bg-red-600 text-white px-2 py-1 text-xs font-bold z-10">
             -{discountPercentage}%
           </div>
+        )}
+
+        {/* Wishlist Button - Top Right */}
+        {isApi && (
+          <button
+            onClick={handleWishlistToggle}
+            disabled={wishlistLoading}
+            className={`absolute top-3 right-3 p-2 rounded-full transition-all shadow-md z-10 ${
+              isInWishlist
+                ? 'bg-red-500 hover:bg-red-600'
+                : 'bg-white hover:bg-gray-100'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            title={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+          >
+            <Heart className={`w-4 h-4 ${isInWishlist ? 'fill-white text-white' : 'text-gray-700'}`} />
+          </button>
         )}
 
         {!inStock && (

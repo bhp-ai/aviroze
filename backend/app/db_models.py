@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
+import uuid
 
 # Enums
 class UserRole(str, enum.Enum):
@@ -12,6 +13,10 @@ class UserRole(str, enum.Enum):
 class UserStatus(str, enum.Enum):
     ACTIVE = "active"
     INACTIVE = "inactive"
+
+class DeletionType(str, enum.Enum):
+    SELF = "self"  # User deleted their own account (can still login)
+    ADMIN = "admin"  # Admin deleted the account (cannot login)
 
 class LogAction(str, enum.Enum):
     CREATED = "created"
@@ -70,7 +75,8 @@ product_colors = Table(
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True)  # Internal ID for database performance
+    public_id = Column(String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))  # Public UUID
     username = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
@@ -78,6 +84,10 @@ class User(Base):
     status = Column(Enum(UserStatus), default=UserStatus.ACTIVE, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    deleted_at = Column(DateTime(timezone=True), nullable=True, default=None, index=True)  # Soft delete timestamp
+    deletion_type = Column(Enum(DeletionType), nullable=True, default=None)  # Who deleted: self or admin
+    deleted_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)  # Admin who deleted
+    stripe_customer_id = Column(String(255), nullable=True, unique=True, index=True)  # Stripe Customer ID for payment integration
 
     # Relationships
     comments = relationship("ProductComment", back_populates="user", cascade="all, delete-orphan")
@@ -125,17 +135,20 @@ class ProductImage(Base):
     image = Column(LargeBinary, nullable=False)  # Binary image data
     image_mimetype = Column(String(50), nullable=False)  # Store MIME type
     display_order = Column(Integer, default=0, nullable=False)  # Order of images
+    color = Column(String(50), nullable=True, index=True)  # Color variant (e.g., 'gray', 'navy', 'charcoal')
+    media_type = Column(String(20), default='image', nullable=False)  # 'image', 'video', or 'gif'
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     product = relationship("Product", back_populates="images")
 
-# Product Variant Model - For size-based inventory
+# Product Variant Model - For color + size based inventory
 class ProductVariant(Base):
     __tablename__ = "product_variants"
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey('products.id', ondelete='CASCADE'), nullable=False, index=True)
+    color = Column(String(50), nullable=True)  # Color variant (e.g., 'gray', 'navy')
     size = Column(String(50), nullable=False)
     quantity = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -151,6 +164,7 @@ class ProductComment(Base):
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey('products.id', ondelete='CASCADE'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    order_id = Column(Integer, ForeignKey('orders.id', ondelete='CASCADE'), nullable=True)  # Link to specific order
     rating = Column(Integer, nullable=False)  # 1-5 stars
     comment = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -159,6 +173,7 @@ class ProductComment(Base):
     # Relationships
     product = relationship("Product", back_populates="comments")
     user = relationship("User", back_populates="comments")
+    order = relationship("Order", backref="comments")
 
 # Order Status Enum
 class OrderStatus(str, enum.Enum):
@@ -279,3 +294,93 @@ class APIRequestLog(Base):
 
     # Relationships
     user = relationship("User")
+
+# Banner Status Enum
+class BannerStatus(str, enum.Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    SCHEDULED = "scheduled"
+
+# Banner Type Enum
+class BannerType(str, enum.Enum):
+    HERO = "hero"
+    PROMOTIONAL = "promotional"
+    ANNOUNCEMENT = "announcement"
+    CATEGORY = "category"
+
+# Banner Model - For homepage promotional banners
+class Banner(Base):
+    __tablename__ = "banners"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    subtitle = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+
+    # Banner type and status
+    banner_type = Column(Enum(BannerType), default=BannerType.PROMOTIONAL, nullable=False, index=True)
+    status = Column(Enum(BannerStatus), default=BannerStatus.INACTIVE, nullable=False, index=True)
+
+    # Display settings
+    display_order = Column(Integer, default=0, nullable=False, index=True)  # Order of display
+
+    # Media
+    image = Column(LargeBinary, nullable=True)  # Banner image
+    image_mimetype = Column(String(50), nullable=True)
+    mobile_image = Column(LargeBinary, nullable=True)  # Separate mobile image
+    mobile_image_mimetype = Column(String(50), nullable=True)
+
+    # Link and CTA
+    link_url = Column(String(500), nullable=True)  # Link when banner is clicked
+    link_text = Column(String(100), nullable=True)  # CTA button text
+    link_target = Column(String(20), default="_self", nullable=False)  # _self or _blank
+
+    # Scheduling
+    start_date = Column(DateTime(timezone=True), nullable=True, index=True)
+    end_date = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    # Style customization
+    text_color = Column(String(7), nullable=True)  # Hex color for text
+    background_color = Column(String(7), nullable=True)  # Hex color for background
+    button_color = Column(String(7), nullable=True)  # Hex color for CTA button
+
+    # Analytics
+    view_count = Column(Integer, default=0, nullable=False)  # Track impressions
+    click_count = Column(Integer, default=0, nullable=False)  # Track clicks
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+# Address Model - For user shipping addresses
+class Address(Base):
+    __tablename__ = "addresses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    full_name = Column(String(255), nullable=False)
+    phone = Column(String(20), nullable=False)
+    address_line1 = Column(String(500), nullable=False)
+    address_line2 = Column(String(500), nullable=True)
+    city = Column(String(100), nullable=False)
+    state = Column(String(100), nullable=False)
+    postal_code = Column(String(20), nullable=False)
+    country = Column(String(100), nullable=False, default="Indonesia")
+    is_default = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User")
+
+# Wishlist Model - For user saved products
+class Wishlist(Base):
+    __tablename__ = "wishlists"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey('products.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    user = relationship("User")
+    product = relationship("Product")

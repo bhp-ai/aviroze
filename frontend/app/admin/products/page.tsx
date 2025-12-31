@@ -11,12 +11,16 @@ interface Product extends APIProduct {
   createdAt: string;
 }
 
-// Helper component to display product image (now using base64 data URLs)
-const ProductImage = ({ images, productName, className }: { images: string[]; productName: string; className?: string }) => {
+// Helper component to display product image/video (now using base64 data URLs)
+const ProductImage = ({ images, productName, className }: { images: any[]; productName: string; className?: string }) => {
   const [hasError, setHasError] = useState(false);
-  const imageUrl = images && images.length > 0 ? images[0] : '';
+  const mediaItem = images && images.length > 0 ? images[0] : null;
 
-  if (hasError || !imageUrl) {
+  // Handle both old string format and new object format
+  const mediaUrl = typeof mediaItem === 'string' ? mediaItem : mediaItem?.url;
+  const mediaType = typeof mediaItem === 'object' ? mediaItem?.media_type : 'image';
+
+  if (hasError || !mediaUrl) {
     return (
       <div className={`rounded bg-gray-200 flex items-center justify-center flex-shrink-0 ${className || 'w-12 h-12'}`}>
         <Package className="w-6 h-6 text-gray-400" />
@@ -24,9 +28,23 @@ const ProductImage = ({ images, productName, className }: { images: string[]; pr
     );
   }
 
+  // Render video
+  if (mediaType === 'video') {
+    return (
+      <video
+        src={mediaUrl}
+        className={`rounded object-cover ${className || 'w-12 h-12'}`}
+        muted
+        loop
+        onError={() => setHasError(true)}
+      />
+    );
+  }
+
+  // Render image or gif
   return (
     <img
-      src={imageUrl}
+      src={mediaUrl}
       alt={productName}
       className={`rounded object-cover ${className || 'w-12 h-12'}`}
       onError={() => setHasError(true)}
@@ -86,10 +104,17 @@ export default function ProductsPage() {
     },
   });
   const [colorInput, setColorInput] = useState('');
+  const [colorError, setColorError] = useState('');
+  const [variantColorInput, setVariantColorInput] = useState('');
   const [variantSizeInput, setVariantSizeInput] = useState('');
   const [variantQuantityInput, setVariantQuantityInput] = useState<number>(0);
+  const [variantError, setVariantError] = useState('');
+  const [editingVariant, setEditingVariant] = useState<{color?: string, size: string} | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [imageFileTypes, setImageFileTypes] = useState<string[]>([]);
+  const [imageColors, setImageColors] = useState<string[]>([]); // Track color for each new media
+  const [replaceAllImages, setReplaceAllImages] = useState<boolean>(false);
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
 
   // Load products from API on mount
@@ -107,7 +132,6 @@ export default function ProductsPage() {
         createdAt: p.created_at
       })));
     } catch (err: any) {
-      console.error('Failed to fetch products:', err);
       setError('Failed to load products');
     } finally {
       setLoading(false);
@@ -162,6 +186,8 @@ export default function ProductsPage() {
       });
       setImageFiles([]);
       setImagePreviews([]);
+      setImageFileTypes([]);
+      setImageColors([]);
     } else {
       setEditingProduct(null);
       setFormData({
@@ -191,6 +217,8 @@ export default function ProductsPage() {
       });
       setImageFiles([]);
       setImagePreviews([]);
+      setImageFileTypes([]);
+      setImageColors([]);
     }
     setColorInput('');
     setVariantSizeInput('');
@@ -203,6 +231,9 @@ export default function ProductsPage() {
     setEditingProduct(null);
     setImageFiles([]);
     setImagePreviews([]);
+    setImageFileTypes([]);
+    setImageColors([]);
+    setReplaceAllImages(false);
   };
 
 
@@ -210,15 +241,46 @@ export default function ProductsPage() {
     const files = e.target.files;
     if (files && files.length > 0) {
       const newFiles = Array.from(files);
+      const MAX_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+
+      // Validate file sizes
+      const invalidFiles = newFiles.filter(file => {
+        const isVideo = file.type.startsWith('video/');
+        const isGif = file.type === 'image/gif';
+        if ((isVideo || isGif) && file.size > MAX_SIZE) {
+          return true;
+        }
+        return false;
+      });
+
+      if (invalidFiles.length > 0) {
+        setError(`Some files are too large. Videos and GIFs must be under 10MB. Large files: ${invalidFiles.map(f => f.name).join(', ')}`);
+        return;
+      }
+
       setImageFiles(prev => [...prev, ...newFiles]);
 
       // Generate previews for all new files
       newFiles.forEach(file => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setImagePreviews(prev => [...prev, reader.result as string]);
-        };
-        reader.readAsDataURL(file);
+        const isVideo = file.type.startsWith('video/');
+        const isGif = file.type === 'image/gif';
+
+        if (isVideo || isGif) {
+          // For videos and GIFs, create a blob URL instead of using FileReader
+          const blobUrl = URL.createObjectURL(file);
+          setImagePreviews(prev => [...prev, blobUrl]);
+          setImageFileTypes(prev => [...prev, file.type]);
+          setImageColors(prev => [...prev, '']); // Initialize with no color
+        } else {
+          // For regular images, use FileReader
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setImagePreviews(prev => [...prev, reader.result as string]);
+            setImageFileTypes(prev => [...prev, file.type]);
+            setImageColors(prev => [...prev, '']); // Initialize with no color
+          };
+          reader.readAsDataURL(file);
+        }
       });
     }
   };
@@ -226,11 +288,12 @@ export default function ProductsPage() {
   const handleRemoveImage = (index: number) => {
     setImageFiles(prev => prev.filter((_, i) => i !== index));
     setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    setImageFileTypes(prev => prev.filter((_, i) => i !== index));
+    setImageColors(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted', { editingProduct: !!editingProduct, formData });
     setLoading(true);
     setError('');
     setValidationErrors({});
@@ -240,19 +303,16 @@ export default function ProductsPage() {
     let errorMessage = '';
 
     if (formData.name.trim().length < 3) {
-      console.log('Validation failed: Product name needs at least 3 characters, got:', formData.name.trim().length);
       errors.name = true;
       errorMessage = 'Product name must have at least 3 characters';
     }
 
     if (formData.description.trim().length < 10) {
-      console.log('Validation failed: Description needs at least 10 characters, got:', formData.description.trim().length);
       errors.description = true;
       if (!errorMessage) errorMessage = 'Description must have at least 10 characters';
     }
 
     if (formData.category.trim().length < 3) {
-      console.log('Validation failed: Category needs at least 3 characters, got:', formData.category.trim().length);
       errors.category = true;
       if (!errorMessage) errorMessage = 'Category must have at least 3 characters';
     }
@@ -266,7 +326,6 @@ export default function ProductsPage() {
       return;
     }
 
-    console.log('Validation passed, proceeding with save');
 
     try {
       // Calculate stock from variants if they exist
@@ -287,27 +346,29 @@ export default function ProductsPage() {
         voucher: formData.voucher
       };
 
-      console.log('Product data prepared:', productData);
-      console.log('Image files:', imageFiles.length, 'files');
 
       if (editingProduct) {
-        console.log('Calling update API for product ID:', formData.id);
-        // Update existing product (replace images if new ones are provided)
-        await productsService.update(formData.id, productData, imageFiles.length > 0 ? imageFiles : undefined, imageFiles.length > 0);
-        console.log('Update successful');
+        // Update existing product
+        await productsService.update(
+          formData.id,
+          productData,
+          imageFiles.length > 0 ? imageFiles : undefined,
+          replaceAllImages,
+          imageColors.length > 0 ? imageColors : undefined
+        );
       } else {
-        console.log('Calling create API');
         // Add new product
-        await productsService.create(productData, imageFiles.length > 0 ? imageFiles : undefined);
-        console.log('Create successful');
+        await productsService.create(
+          productData,
+          imageFiles.length > 0 ? imageFiles : undefined,
+          imageColors.length > 0 ? imageColors : undefined
+        );
       }
 
       // Refresh products list
-      console.log('Refreshing products list');
       await fetchProducts();
       handleCloseModal();
     } catch (err: any) {
-      console.error('Failed to save product:', err);
       setError(err.response?.data?.detail || 'Failed to save product');
     } finally {
       setLoading(false);
@@ -326,7 +387,6 @@ export default function ProductsPage() {
           await productsService.delete(id);
           await fetchProducts();
         } catch (err: any) {
-          console.error('Failed to delete product:', err);
           setError(err.response?.data?.detail || 'Failed to delete product');
         } finally {
           setLoading(false);
@@ -364,7 +424,6 @@ export default function ProductsPage() {
           await fetchProducts();
           setSelectedProducts([]);
         } catch (err) {
-          console.error('Failed to delete products:', err);
           setError('Failed to delete some products');
         } finally {
           setLoading(false);
@@ -388,7 +447,6 @@ export default function ProductsPage() {
           await fetchProducts();
           setSelectedProducts([]);
         } catch (err) {
-          console.error('Failed to update products:', err);
           setError('Failed to update some products');
         } finally {
           setLoading(false);
@@ -603,15 +661,15 @@ export default function ProductsPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1 flex-wrap max-w-[200px]">
+                  <td className="px-6 py-4 whitespace-normal">
+                    <div className="flex items-start gap-1 flex-wrap max-w-[200px]">
                       {product.variants && product.variants.length > 0 ? (
                         <>
                           {product.variants.slice(0, 3).map((variant, index) => (
                             <span
                               key={index}
                               className="inline-flex px-2 py-1 text-xs font-semibold rounded bg-gray-100 text-gray-800 border border-gray-300"
-                              title={`${variant.size}: ${variant.quantity} units`}
+                              title={`${variant.color ? `${variant.color} - ` : ''}${variant.size}: ${variant.quantity} units`}
                             >
                               {variant.size} ({variant.quantity})
                             </span>
@@ -749,7 +807,7 @@ export default function ProductsPage() {
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto" id="product-modal">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold text-gray-900">
                 {editingProduct ? 'Edit Product' : 'Add New Product'}
               </h2>
@@ -857,61 +915,169 @@ export default function ProductsPage() {
 
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Product Images
+                        Product Media (Images, Videos, GIFs)
                       </label>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,video/mp4,video/webm,video/quicktime"
                         multiple
                         onChange={handleImageChange}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                       />
-                      <p className="text-xs text-gray-500 mt-1">You can select multiple images</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        You can select multiple files. Videos and GIFs max 10MB each. Videos/GIFs will appear first.
+                      </p>
+
+                      {/* Replace all images checkbox - only show when editing */}
+                      {editingProduct && (
+                        <div className="mt-3">
+                          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={replaceAllImages}
+                              onChange={(e) => setReplaceAllImages(e.target.checked)}
+                              className="w-4 h-4 text-gray-900 border-gray-300 rounded focus:ring-gray-900"
+                            />
+                            <span>Replace all existing media (check this to remove old media and use only new uploads)</span>
+                          </label>
+                        </div>
+                      )}
 
                       <div className="mt-3">
-                        {/* Show existing images */}
-                        {editingProduct && formData.images && formData.images.length > 0 && imagePreviews.length === 0 && (
-                          <div>
-                            <p className="text-xs text-gray-600 mb-2">Current images:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {formData.images.map((img, idx) => (
-                                <div key={idx} className="relative">
-                                  <img
-                                    src={img}
-                                    alt={`Current ${idx + 1}`}
-                                    className="w-20 h-20 rounded object-cover border border-gray-200"
-                                  />
+                        {/* Show existing media - Group by color */}
+                        {editingProduct && formData.images && formData.images.length > 0 && (
+                          <div className="mb-4">
+                            <p className="text-xs font-semibold text-gray-700 mb-3">Current Media ({formData.images.length} files):</p>
+
+                            {/* Group images by color */}
+                            {(() => {
+                              const imagesByColor: { [key: string]: any[] } = {};
+                              formData.images.forEach((img: any) => {
+                                const color = typeof img === 'object' && img.color ? img.color : 'No Color';
+                                if (!imagesByColor[color]) imagesByColor[color] = [];
+                                imagesByColor[color].push(img);
+                              });
+
+                              return Object.entries(imagesByColor).map(([color, images]) => (
+                                <div key={color} className="mb-3">
+                                  <p className="text-xs text-gray-600 mb-1 font-medium uppercase">{color}:</p>
+                                  <div className="flex flex-wrap gap-2 pl-2">
+                                    {images.map((img, idx) => {
+                                      const mediaUrl = typeof img === 'string' ? img : img.url;
+                                      const mediaType = typeof img === 'object' ? img.media_type : 'image';
+                                      const isVideo = mediaType === 'video';
+                                      const isGif = mediaType === 'gif';
+
+                                      return (
+                                        <div key={idx} className="relative">
+                                          {isVideo ? (
+                                            <video
+                                              src={mediaUrl}
+                                              className="w-20 h-20 rounded object-cover border border-gray-300"
+                                              muted
+                                              loop
+                                            />
+                                          ) : (
+                                            <img
+                                              src={mediaUrl}
+                                              alt={`${color} ${idx + 1}`}
+                                              className="w-20 h-20 rounded object-cover border border-gray-300"
+                                            />
+                                          )}
+                                          {/* Media type badge */}
+                                          {(isVideo || isGif) && (
+                                            <div className="absolute top-1 left-1 bg-black bg-opacity-70 text-white text-xs px-1 rounded">
+                                              {isVideo ? 'VIDEO' : 'GIF'}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              ))}
-                            </div>
-                            <p className="text-xs text-gray-500 mt-2">
-                              Select new images to replace all current images
-                            </p>
+                              ));
+                            })()}
                           </div>
                         )}
 
-                        {/* Show new image previews */}
+                        {/* Show new media previews - Group by color */}
                         {imagePreviews.length > 0 && (
                           <div>
-                            <p className="text-xs text-gray-600 mb-2">New images to upload:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {imagePreviews.map((preview, idx) => (
-                                <div key={idx} className="relative">
-                                  <img
-                                    src={preview}
-                                    alt={`Preview ${idx + 1}`}
-                                    className="w-20 h-20 rounded object-cover border border-gray-200"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveImage(idx)}
-                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
-                                  >
-                                    ×
-                                  </button>
+                            <p className="text-xs text-gray-600 mb-3 font-semibold">New media to upload ({imagePreviews.length} files):</p>
+
+                            {/* Group new media by selected color */}
+                            {(() => {
+                              const mediaByColor: { [key: string]: number[] } = {};
+                              imagePreviews.forEach((_, idx) => {
+                                const color = imageColors[idx] || 'Unassigned';
+                                if (!mediaByColor[color]) mediaByColor[color] = [];
+                                mediaByColor[color].push(idx);
+                              });
+
+                              return Object.entries(mediaByColor).map(([color, indices]) => (
+                                <div key={color} className="mb-3">
+                                  <p className="text-xs text-gray-600 mb-1 font-medium uppercase">{color}:</p>
+                                  <div className="flex flex-wrap gap-3 pl-2">
+                                    {indices.map((idx) => {
+                                      const preview = imagePreviews[idx];
+                                      const fileType = imageFileTypes[idx] || '';
+                                      const isVideo = fileType.startsWith('video/');
+                                      const isGif = fileType === 'image/gif';
+
+                                      return (
+                                        <div key={idx} className="flex flex-col gap-1">
+                                          <div className="relative">
+                                            {isVideo ? (
+                                              <video
+                                                src={preview}
+                                                className="w-20 h-20 rounded object-cover border border-gray-200"
+                                                muted
+                                                loop
+                                                autoPlay
+                                              />
+                                            ) : (
+                                              <img
+                                                src={preview}
+                                                alt={`Preview ${idx + 1}`}
+                                                className="w-20 h-20 rounded object-cover border border-gray-200"
+                                              />
+                                            )}
+                                            {/* Media type badge */}
+                                            {(isVideo || isGif) && (
+                                              <div className="absolute bottom-1 left-1 bg-black bg-opacity-70 text-white text-xs px-1 rounded">
+                                                {isVideo ? 'VIDEO' : 'GIF'}
+                                              </div>
+                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveImage(idx)}
+                                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+                                          {/* Color selector for each media */}
+                                          <select
+                                            value={imageColors[idx] || ''}
+                                            onChange={(e) => {
+                                              const newColors = [...imageColors];
+                                              newColors[idx] = e.target.value;
+                                              setImageColors(newColors);
+                                            }}
+                                            className="text-xs px-1 py-1 border border-gray-300 rounded focus:outline-none focus:border-gray-900 w-20"
+                                          >
+                                            <option value="">No Color</option>
+                                            {formData.colors && formData.colors.map((c) => (
+                                              <option key={c} value={c}>{c}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              ))}
-                            </div>
+                              ));
+                            })()}
                           </div>
                         )}
 
@@ -981,55 +1147,96 @@ export default function ProductsPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            if (colorInput && !formData.colors?.includes(colorInput)) {
-                              setFormData({
-                                ...formData,
-                                colors: [...(formData.colors || []), colorInput]
-                              });
-                              setColorInput('');
+                            setColorError('');
+                            if (!colorInput || colorInput.trim() === '') {
+                              setColorError('Please enter a color value');
+                              setTimeout(() => setColorError(''), 3000);
+                              return;
                             }
+                            if (formData.colors?.includes(colorInput)) {
+                              setColorError('This color already exists');
+                              setTimeout(() => setColorError(''), 3000);
+                              return;
+                            }
+                            setFormData({
+                              ...formData,
+                              colors: [...(formData.colors || []), colorInput]
+                            });
+                            setColorInput('');
                           }}
                           className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
                         >
                           Add Color
                         </button>
                       </div>
+                      {colorError && (
+                        <p className="text-sm text-red-600 mt-2">{colorError}</p>
+                      )}
                       {formData.colors && formData.colors.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-2">
-                          {formData.colors.map((color, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-lg border border-gray-300"
-                            >
+                          {formData.colors.map((color, index) => {
+                            // Check if this color has any media associated with it
+                            const hasMedia = formData.images?.some((img: any) => {
+                              if (typeof img === 'string') return false;
+                              return img.color && img.color.toLowerCase() === color.toLowerCase();
+                            });
+
+                            return (
                               <div
-                                className="w-5 h-5 rounded border border-gray-300"
-                                style={{ backgroundColor: color }}
-                              />
-                              <span className="text-sm text-gray-700">{color}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setFormData({
-                                    ...formData,
-                                    colors: formData.colors?.filter((_, i) => i !== index)
-                                  });
-                                }}
-                                className="text-red-600 hover:text-red-800"
+                                key={index}
+                                className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-lg border border-gray-300"
                               >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
+                                <div
+                                  className="w-5 h-5 rounded border border-gray-300"
+                                  style={{ backgroundColor: color }}
+                                />
+                                <span className="text-sm text-gray-700">{color}</span>
+                                {hasMedia && (
+                                  <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                                    ✓ Media
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData({
+                                      ...formData,
+                                      colors: formData.colors?.filter((_, i) => i !== index)
+                                    });
+                                  }}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        💡 Enter a hex color code (e.g., #000000) and click "Add Color". Colors with media will show a green "✓ Media" badge.
+                      </p>
                     </div>
 
-                    {/* Variants Section - Size with Quantity */}
+                    {/* Variants Section - Color + Size with Quantity */}
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Product Variants (Size & Quantity)
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Product Variants (Color + Size + Quantity)
                       </label>
+                      <p className="text-xs text-gray-500 mb-2">
+                        Track inventory per color and size combination (e.g., Gray-S: 10, Gray-M: 15, Navy-S: 8). Each variant represents a specific color+size stock.
+                      </p>
                       <div className="flex gap-2 mb-2">
+                        <select
+                          value={variantColorInput}
+                          onChange={(e) => setVariantColorInput(e.target.value)}
+                          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                        >
+                          <option value="">Select Color</option>
+                          {formData.colors && formData.colors.map((color) => (
+                            <option key={color} value={color}>{color}</option>
+                          ))}
+                        </select>
                         <input
                           type="text"
                           value={variantSizeInput}
@@ -1048,62 +1255,173 @@ export default function ProductsPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            if (variantSizeInput && variantQuantityInput > 0) {
-                              const existingVariantIndex = formData.variants?.findIndex(v => v.size === variantSizeInput);
-                              if (existingVariantIndex !== undefined && existingVariantIndex >= 0) {
-                                // Update existing variant
-                                const updatedVariants = [...(formData.variants || [])];
-                                updatedVariants[existingVariantIndex] = { size: variantSizeInput, quantity: variantQuantityInput };
-                                setFormData({
-                                  ...formData,
-                                  variants: updatedVariants
-                                });
-                              } else {
-                                // Add new variant
-                                setFormData({
-                                  ...formData,
-                                  variants: [...(formData.variants || []), { size: variantSizeInput, quantity: variantQuantityInput }]
-                                });
-                              }
-                              setVariantSizeInput('');
-                              setVariantQuantityInput(0);
+                            // Validation
+                            setVariantError('');
+                            if (!variantColorInput || variantColorInput.trim() === '') {
+                              setVariantError('Please select a color for the variant');
+                              setTimeout(() => setVariantError(''), 3000);
+                              return;
                             }
+                            if (!variantSizeInput || variantSizeInput.trim() === '') {
+                              setVariantError('Please enter a size for the variant');
+                              setTimeout(() => setVariantError(''), 3000);
+                              return;
+                            }
+                            if (!variantQuantityInput || variantQuantityInput <= 0) {
+                              setVariantError('Please enter a quantity greater than 0');
+                              setTimeout(() => setVariantError(''), 3000);
+                              return;
+                            }
+
+                            let updatedVariants = [...(formData.variants || [])];
+
+                            if (editingVariant) {
+                                // Find the original variant being edited
+                                const originalVariant = updatedVariants.find(v =>
+                                  v.color === editingVariant.color && v.size === editingVariant.size
+                                );
+
+                                if (originalVariant) {
+                                  const remainingQty = originalVariant.quantity - variantQuantityInput;
+
+                                  // Remove the original variant
+                                  updatedVariants = updatedVariants.filter(v =>
+                                    !(v.color === editingVariant.color && v.size === editingVariant.size)
+                                  );
+
+                                  // If there's remaining quantity, keep it with original color
+                                  if (remainingQty > 0) {
+                                    updatedVariants.push({
+                                      color: editingVariant.color,
+                                      size: editingVariant.size,
+                                      quantity: remainingQty
+                                    });
+                                  }
+
+                                  // Add the new variant with selected quantity and new color
+                                  const existingNewColorIndex = updatedVariants.findIndex(
+                                    v => v.color === variantColorInput && v.size === variantSizeInput
+                                  );
+
+                                  if (existingNewColorIndex >= 0) {
+                                    // Add to existing variant with same color+size
+                                    updatedVariants[existingNewColorIndex].quantity += variantQuantityInput;
+                                  } else {
+                                    // Create new variant
+                                    updatedVariants.push({
+                                      color: variantColorInput,
+                                      size: variantSizeInput,
+                                      quantity: variantQuantityInput
+                                    });
+                                  }
+                                }
+                                setEditingVariant(null);
+                              } else {
+                                // Check if exact variant exists (same color and size)
+                                const exactMatchIndex = updatedVariants.findIndex(
+                                  v => v.color === variantColorInput && v.size === variantSizeInput
+                                );
+
+                                if (exactMatchIndex >= 0) {
+                                  // Update existing variant
+                                  updatedVariants[exactMatchIndex] = {
+                                    color: variantColorInput,
+                                    size: variantSizeInput,
+                                    quantity: variantQuantityInput
+                                  };
+                                } else {
+                                  // Add new variant
+                                  updatedVariants.push({
+                                    color: variantColorInput,
+                                    size: variantSizeInput,
+                                    quantity: variantQuantityInput
+                                  });
+                                }
+                              }
+
+                            setFormData({
+                              ...formData,
+                              variants: updatedVariants
+                            });
+                            setVariantColorInput('');
+                            setVariantSizeInput('');
+                            setVariantQuantityInput(0);
                           }}
                           className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors whitespace-nowrap"
                         >
-                          Add Variant
+                          {editingVariant ? 'Update Variant' : 'Add Variant'}
                         </button>
                       </div>
+                      {variantError && (
+                        <p className="text-sm text-red-600 mt-2">{variantError}</p>
+                      )}
                       {formData.variants && formData.variants.length > 0 && (
                         <div>
                           <p className="text-xs text-gray-600 mb-2">
                             Total Stock: {formData.variants.reduce((sum, v) => sum + v.quantity, 0)} units
                           </p>
-                          <div className="flex flex-wrap gap-2">
-                            {formData.variants.map((variant, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg border border-gray-300"
-                              >
-                                <span className="text-sm font-semibold text-gray-900">{variant.size}</span>
-                                <span className="text-sm text-gray-600">({variant.quantity} units)</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setFormData({
-                                      ...formData,
-                                      variants: formData.variants?.filter((_, i) => i !== index)
-                                    });
-                                  }}
-                                  className="text-red-600 hover:text-red-800"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
+                          {/* Group variants by color */}
+                          {(() => {
+                            const variantsByColor: { [key: string]: any[] } = {};
+                            formData.variants.forEach((variant: any) => {
+                              const color = variant.color || 'No Color';
+                              if (!variantsByColor[color]) variantsByColor[color] = [];
+                              variantsByColor[color].push(variant);
+                            });
+                            return Object.entries(variantsByColor).map(([color, variants]) => (
+                              <div key={color} className="mb-3">
+                                <p className="text-xs font-semibold uppercase text-gray-700 mb-1">{color}:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {variants.map((variant, index) => (
+                                    <div
+                                      key={`${color}-${variant.size}-${index}`}
+                                      className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg border border-gray-300"
+                                    >
+                                      <span className="text-sm font-semibold text-gray-900">{variant.size}</span>
+                                      <span className="text-sm text-gray-600">({variant.quantity} units)</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          // Populate inputs with variant data for editing
+                                          setVariantColorInput(variant.color || '');
+                                          setVariantSizeInput(variant.size);
+                                          setVariantQuantityInput(variant.quantity);
+                                          // Track which variant is being edited
+                                          setEditingVariant({ color: variant.color, size: variant.size });
+                                        }}
+                                        className="text-blue-600 hover:text-blue-800"
+                                        title="Edit variant"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setFormData({
+                                            ...formData,
+                                            variants: formData.variants?.filter(v =>
+                                              !(v.color === variant.color && v.size === variant.size)
+                                            )
+                                          });
+                                        }}
+                                        className="text-red-600 hover:text-red-800"
+                                        title="Delete variant"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            ))}
-                          </div>
+                            ));
+                          })()}
                         </div>
                       )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        💡 Select a color, enter size and quantity, then click "Add Variant". To update existing variants, click the pencil icon.
+                      </p>
                     </div>
                   </div>
                 </div>

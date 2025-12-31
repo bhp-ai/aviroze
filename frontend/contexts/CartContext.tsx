@@ -37,7 +37,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       try {
         setItems(JSON.parse(savedCart));
       } catch (error) {
-        console.error('Failed to load cart:', error);
       }
     }
     setIsInitialized(true);

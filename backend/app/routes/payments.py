@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
 from app.database import get_db
-from app.db_models import Product, User
+from app.db_models import Product, User, Address
 from app.auth import get_current_user
 from app.services.email_service import email_service
+from app.services.stripe_service import stripe_service
 import stripe
 import os
 from dotenv import load_dotenv
@@ -150,27 +151,112 @@ async def create_checkout_session(
                     "selected_color": item.selected_color
                 })
 
+        # Get user's default address if exists
+        default_address = db.query(Address).filter(
+            Address.user_id == current_user.id,
+            Address.is_default == True
+        ).first()
+
         # Create Stripe checkout session
         # Use environment variables or configuration for URLs
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=line_items,
-            mode="payment",
-            success_url=f"{frontend_url}/checkout/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{frontend_url}/checkout/cancel",
-            customer_email=current_user.email,
-            billing_address_collection="required",
-            shipping_address_collection={
-                "allowed_countries": ["US", "CA", "GB", "AU", "ID", "SG", "MY", "TH", "PH", "VN"],
-            },
-            metadata={
+        # Prepare session parameters
+        session_params = {
+            "payment_method_types": ["card"],
+            "line_items": line_items,
+            "mode": "payment",
+            "success_url": f"{frontend_url}/checkout/success?session_id={{CHECKOUT_SESSION_ID}}",
+            "cancel_url": f"{frontend_url}/checkout/cancel",
+            "billing_address_collection": "required",
+            "metadata": {
                 "user_id": str(current_user.id),
                 "user_email": current_user.email,
                 "cart_data": json.dumps(cart_data)
             }
-        )
+        }
+
+        # If default address exists, create/update Stripe Customer and use it
+        if default_address:
+            try:
+                # Create or update Stripe Customer with saved address
+                stripe_customer_id = stripe_service.create_or_update_customer(
+                    current_user, default_address, db
+                )
+
+                # Use the Stripe Customer instead of just email
+                session_params["customer"] = stripe_customer_id
+
+                # Map country name to ISO code
+                country_code_map = {
+                    "Indonesia": "ID",
+                    "United States": "US",
+                    "Canada": "CA",
+                    "United Kingdom": "GB",
+                    "Australia": "AU",
+                    "Singapore": "SG",
+                    "Malaysia": "MY",
+                    "Thailand": "TH",
+                    "Philippines": "PH",
+                    "Vietnam": "VN",
+                }
+                country_code = country_code_map.get(default_address.country, "ID")
+
+                # IMPORTANT: Stripe Checkout Sessions have a limitation:
+                # You CANNOT pre-fill shipping address when using shipping_address_collection
+                # The workaround is to use invoice_creation with custom fields showing the saved address
+                # OR use Payment Element instead of Checkout Session
+                # For now, we'll collect the address but at least link it to the Customer
+
+                # Enable shipping address collection
+                session_params["shipping_address_collection"] = {
+                    "allowed_countries": ["US", "CA", "GB", "AU", "ID", "SG", "MY", "TH", "PH", "VN"],
+                }
+
+                # Add shipping options
+                session_params["shipping_options"] = [
+                    {
+                        "shipping_rate_data": {
+                            "type": "fixed_amount",
+                            "fixed_amount": {
+                                "amount": max(50, shipping_in_cents),
+                                "currency": "usd",
+                            },
+                            "display_name": "Standard shipping",
+                            "delivery_estimate": {
+                                "minimum": {
+                                    "unit": "business_day",
+                                    "value": 3,
+                                },
+                                "maximum": {
+                                    "unit": "business_day",
+                                    "value": 7,
+                                },
+                            },
+                        },
+                    },
+                ]
+
+                # Enable phone number collection
+                session_params["phone_number_collection"] = {"enabled": True}
+
+                print(f"[Checkout] Using Stripe Customer {stripe_customer_id} with pre-filled address for user {current_user.email}")
+
+            except Exception as e:
+                # If Stripe Customer creation fails, fall back to basic checkout
+                print(f"[Checkout] Failed to create Stripe Customer: {str(e)}")
+                session_params["customer_email"] = current_user.email
+                session_params["shipping_address_collection"] = {
+                    "allowed_countries": ["US", "CA", "GB", "AU", "ID", "SG", "MY", "TH", "PH", "VN"],
+                }
+        else:
+            # No default address, use customer_email and collect shipping address
+            session_params["customer_email"] = current_user.email
+            session_params["shipping_address_collection"] = {
+                "allowed_countries": ["US", "CA", "GB", "AU", "ID", "SG", "MY", "TH", "PH", "VN"],
+            }
+
+        checkout_session = stripe.checkout.Session.create(**session_params)
 
         return {
             "checkout_url": checkout_session.url,

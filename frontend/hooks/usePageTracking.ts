@@ -42,11 +42,9 @@ export function usePageTracking() {
           }
         };
 
-        console.log('Logging page visit:', logData);
         await apiClient.post('/api/logs/activities', logData);
       } catch (error) {
         // Silently fail - don't disrupt user experience if logging fails
-        console.debug('Failed to log page visit:', error);
       }
     };
 

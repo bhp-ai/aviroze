@@ -37,7 +37,6 @@ export default function ProductsPage() {
         const cats = await productsService.getCategories();
         setCategories(cats);
       } catch (err) {
-        console.error('Failed to fetch categories:', err);
       }
     };
     fetchCategories();
@@ -64,11 +63,24 @@ export default function ProductsPage() {
           );
         }
 
+        // Sort products: in-stock first, then out-of-stock
+        filteredProducts.sort((a, b) => {
+          // If both have stock or both don't have stock, maintain original order
+          if ((a.stock > 0 && b.stock > 0) || (a.stock === 0 && b.stock === 0)) {
+            return 0;
+          }
+          // If a has stock and b doesn't, a comes first
+          if (a.stock > 0 && b.stock === 0) {
+            return -1;
+          }
+          // If b has stock and a doesn't, b comes first
+          return 1;
+        });
+
         setAllProducts(filteredProducts);
         setDisplayedProducts(filteredProducts.slice(0, ITEMS_PER_PAGE));
         setHasMore(filteredProducts.length > ITEMS_PER_PAGE);
       } catch (err) {
-        console.error('Failed to fetch products:', err);
         setError('Failed to load products');
       } finally {
         setLoading(false);

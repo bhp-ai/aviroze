@@ -16,7 +16,7 @@ export interface UserUpdate {
 }
 
 export const usersService = {
-  async getAll(params?: { role?: string; status?: string; search?: string }): Promise<User[]> {
+  async getAll(params?: { role?: string; status?: string; search?: string; include_deleted?: boolean }): Promise<User[]> {
     const response = await apiClient.get<User[]>('/api/users/', { params });
     return response.data;
   },
@@ -38,5 +38,15 @@ export const usersService = {
 
   async delete(id: number): Promise<void> {
     await apiClient.delete(`/api/users/${id}`);
+  },
+
+  async selfDeleteAccount(): Promise<User> {
+    const response = await apiClient.post<User>('/api/users/me/delete?consent=true');
+    return response.data;
+  },
+
+  async restore(id: number): Promise<User> {
+    const response = await apiClient.post<User>(`/api/users/${id}/restore`);
+    return response.data;
   },
 };

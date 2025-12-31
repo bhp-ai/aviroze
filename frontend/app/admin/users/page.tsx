@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, UserPlus, Edit, Trash2, Download, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Search, UserPlus, Edit, Trash2, Download, ChevronLeft, ChevronRight, X, RotateCcw, AlertCircle } from 'lucide-react';
 import { usersService, UserCreate, UserUpdate } from '@/lib/services/users';
 import { User, authService } from '@/lib/services/auth';
 import { exportToCSV, formatDateForCSV } from '@/lib/utils/csv-export';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [deletedUsers, setDeletedUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'admin' | 'user'>('admin');
+  const [activeTab, setActiveTab] = useState<'admin' | 'user' | 'deleted'>('admin');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -17,6 +18,7 @@ export default function UsersPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
     username: '',
@@ -30,6 +32,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
+    fetchDeletedUsers();
     // Get current user from localStorage
     const user = authService.getUser();
     setCurrentUser(user);
@@ -39,13 +42,21 @@ export default function UsersPage() {
     try {
       setLoading(true);
       setError('');
-      const data = await usersService.getAll({ search: searchTerm });
+      const data = await usersService.getAll({ search: searchTerm, include_deleted: false });
       setUsers(data);
     } catch (err: any) {
-      console.error('Failed to fetch users:', err);
       setError('Failed to load users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDeletedUsers = async () => {
+    try {
+      const data = await usersService.getAll({ search: searchTerm, include_deleted: true });
+      const deleted = data.filter((u: User) => u.deleted_at);
+      setDeletedUsers(deleted);
+    } catch (err: any) {
     }
   };
 
@@ -53,6 +64,7 @@ export default function UsersPage() {
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchUsers();
+      fetchDeletedUsers();
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
@@ -67,7 +79,7 @@ export default function UsersPage() {
   const regularUsers = users.filter(user => user.role === 'user');
 
   // Pagination calculations
-  const displayUsers = activeTab === 'admin' ? adminUsers : regularUsers;
+  const displayUsers = activeTab === 'admin' ? adminUsers : activeTab === 'user' ? regularUsers : deletedUsers;
   const indexOfLastUser = currentPage * usersPerPage;
   const indexOfFirstUser = indexOfLastUser - usersPerPage;
   const currentUsers = displayUsers.slice(indexOfFirstUser, indexOfLastUser);
@@ -79,7 +91,7 @@ export default function UsersPage() {
   };
 
   const handleExportCSV = () => {
-    const usersToExport = activeTab === 'admin' ? adminUsers : regularUsers;
+    const usersToExport = activeTab === 'admin' ? adminUsers : activeTab === 'user' ? regularUsers : deletedUsers;
 
     const csvData = usersToExport.map(user => ({
       id: user.id,
@@ -118,7 +130,6 @@ export default function UsersPage() {
       setFormData({ username: '', email: '', password: '', role: 'user', status: 'active' });
       await fetchUsers();
     } catch (err: any) {
-      console.error('Failed to create user:', err);
       setError(err.response?.data?.detail || 'Failed to create user');
     } finally {
       setLoading(false);
@@ -143,7 +154,6 @@ export default function UsersPage() {
       setFormData({ username: '', email: '', password: '', role: 'user', status: 'active' });
       await fetchUsers();
     } catch (err: any) {
-      console.error('Failed to update user:', err);
       setError(err.response?.data?.detail || 'Failed to update user');
     } finally {
       setLoading(false);
@@ -159,9 +169,26 @@ export default function UsersPage() {
       setShowDeleteModal(false);
       setSelectedUser(null);
       await fetchUsers();
+      await fetchDeletedUsers();
     } catch (err: any) {
-      console.error('Failed to delete user:', err);
       setError(err.response?.data?.detail || 'Failed to delete user');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestoreUser = async () => {
+    if (!selectedUser) return;
+    try {
+      setLoading(true);
+      setError('');
+      await usersService.restore(selectedUser.id);
+      setShowRestoreModal(false);
+      setSelectedUser(null);
+      await fetchUsers();
+      await fetchDeletedUsers();
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to restore user');
     } finally {
       setLoading(false);
     }
@@ -189,6 +216,11 @@ export default function UsersPage() {
     setShowDeleteModal(true);
   };
 
+  const openRestoreModal = (user: User) => {
+    setSelectedUser(user);
+    setShowRestoreModal(true);
+  };
+
   // Reusable table component
   const UserTable = ({ emptyMessage }: { emptyMessage: string }) => (
     <div>
@@ -197,6 +229,9 @@ export default function UsersPage() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ID
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   User
                 </th>
@@ -209,6 +244,11 @@ export default function UsersPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Joined
                 </th>
+                {activeTab === 'deleted' && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Deleted
+                  </th>
+                )}
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -219,6 +259,9 @@ export default function UsersPage() {
                 const isProtectedUser = user.email === 'admin@admin.com' || user.email === 'user@user.com';
                 return (
                   <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-xs font-mono text-gray-600">{user.public_id || `#${user.id}`}</span>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="flex items-center gap-2">
@@ -257,31 +300,53 @@ export default function UsersPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(user.created_at).toLocaleDateString()}
                     </td>
+                    {activeTab === 'deleted' && user.deleted_at && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {new Date(user.deleted_at).toLocaleDateString()}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {user.deletion_type === 'admin' ? 'By Admin' : 'Self-Deleted'}
+                        </div>
+                      </td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => openEditModal(user)}
-                        disabled={isProtectedUser}
-                        className={`mr-4 ${
-                          isProtectedUser
-                            ? 'text-gray-300 cursor-not-allowed'
-                            : 'text-blue-600 hover:text-blue-900'
-                        }`}
-                        title={isProtectedUser ? 'System users cannot be modified' : 'Edit user'}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => openDeleteModal(user)}
-                        disabled={isProtectedUser}
-                        className={
-                          isProtectedUser
-                            ? 'text-gray-300 cursor-not-allowed'
-                            : 'text-red-600 hover:text-red-900'
-                        }
-                        title={isProtectedUser ? 'System users cannot be deleted' : 'Delete user'}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {activeTab === 'deleted' ? (
+                        <button
+                          onClick={() => openRestoreModal(user)}
+                          className="text-green-600 hover:text-green-900"
+                          title="Restore user"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => openEditModal(user)}
+                            disabled={isProtectedUser}
+                            className={`mr-4 ${
+                              isProtectedUser
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-blue-600 hover:text-blue-900'
+                            }`}
+                            title={isProtectedUser ? 'System users cannot be modified' : 'Edit user'}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => openDeleteModal(user)}
+                            disabled={isProtectedUser}
+                            className={
+                              isProtectedUser
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-red-600 hover:text-red-900'
+                            }
+                            title={isProtectedUser ? 'System users cannot be deleted' : 'Delete user'}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 );
@@ -413,6 +478,16 @@ export default function UsersPage() {
           >
             Regular Users ({regularUsers.length})
           </button>
+          <button
+            onClick={() => setActiveTab('deleted')}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'deleted'
+                ? 'border-gray-900 text-gray-900'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Deleted Accounts ({deletedUsers.length})
+          </button>
         </div>
       </div>
 
@@ -427,9 +502,13 @@ export default function UsersPage() {
         <UserTable
           emptyMessage="No admin users found"
         />
-      ) : (
+      ) : activeTab === 'user' ? (
         <UserTable
           emptyMessage="No regular users found"
+        />
+      ) : (
+        <UserTable
+          emptyMessage="No deleted accounts found"
         />
       )}
 
@@ -657,7 +736,7 @@ export default function UsersPage() {
 
             <p className="text-gray-600 mb-6">
               Are you sure you want to delete the user <strong>{selectedUser.username}</strong> ({selectedUser.email})?
-              This action cannot be undone.
+              The user will receive an email notification and their account will be moved to Deleted Accounts.
             </p>
 
             <div className="flex gap-3">
@@ -673,6 +752,65 @@ export default function UsersPage() {
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Deleting...' : 'Delete User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restore Confirmation Modal */}
+      {showRestoreModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Restore User</h2>
+              <button
+                onClick={() => setShowRestoreModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded">
+                {error}
+              </div>
+            )}
+
+            <div className="mb-6">
+              <p className="text-gray-600 mb-4">
+                Restore the account for <strong>{selectedUser.username}</strong> ({selectedUser.email})?
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">What happens:</p>
+                    <ul className="space-y-1 list-disc list-inside">
+                      <li>User will be able to login again</li>
+                      <li>Account will be moved to active users</li>
+                      <li>All previous data is preserved</li>
+                      <li>User will receive an email notification</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowRestoreModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRestoreUser}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Restoring...' : 'Restore User'}
               </button>
             </div>
           </div>

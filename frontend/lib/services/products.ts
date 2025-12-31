@@ -17,8 +17,16 @@ export interface Voucher {
 }
 
 export interface ProductVariant {
+  color?: string;
   size: string;
   quantity: number;
+}
+
+export interface ProductImage {
+  url: string;
+  color?: string;
+  display_order: number;
+  media_type: 'image' | 'video' | 'gif';
 }
 
 export interface Product {
@@ -28,7 +36,7 @@ export interface Product {
   price: number;
   category: string;
   stock: number;
-  images: string[];  // Array of base64 image data URLs
+  images: ProductImage[];  // Array of image objects with color info
   colors?: string[];
   sizes?: string[];
   variants?: ProductVariant[];
@@ -59,8 +67,9 @@ export const productsService = {
     return response.data;
   },
 
-  async getById(id: number): Promise<Product> {
-    const response = await apiClient.get<Product>(`/api/products/${id}`);
+  async getById(id: number, color?: string): Promise<Product> {
+    const params = color ? { color } : undefined;
+    const response = await apiClient.get<Product>(`/api/products/${id}`, { params });
     return response.data;
   },
 
@@ -85,7 +94,7 @@ export const productsService = {
     return response.data;
   },
 
-  async create(data: ProductCreate, imageFiles?: File[]): Promise<Product> {
+  async create(data: ProductCreate, imageFiles?: File[], imageColors?: string[]): Promise<Product> {
     const formData = new FormData();
     formData.append('name', data.name);
     formData.append('description', data.description);
@@ -97,6 +106,10 @@ export const productsService = {
       imageFiles.forEach((file) => {
         formData.append('images', file);
       });
+    }
+
+    if (imageColors && imageColors.length > 0) {
+      formData.append('image_colors', JSON.stringify(imageColors));
     }
 
     if (data.colors && data.colors.length > 0) {
@@ -127,7 +140,7 @@ export const productsService = {
     return response.data;
   },
 
-  async update(id: number, data: ProductUpdate, imageFiles?: File[], replaceImages: boolean = false): Promise<Product> {
+  async update(id: number, data: ProductUpdate, imageFiles?: File[], replaceImages: boolean = false, imageColors?: string[]): Promise<Product> {
     const formData = new FormData();
 
     if (data.name !== undefined) formData.append('name', data.name);
@@ -140,6 +153,10 @@ export const productsService = {
       imageFiles.forEach((file) => {
         formData.append('images', file);
       });
+    }
+
+    if (imageColors && imageColors.length > 0) {
+      formData.append('image_colors', JSON.stringify(imageColors));
     }
 
     formData.append('replace_images', replaceImages.toString());
@@ -164,12 +181,21 @@ export const productsService = {
       formData.append('voucher', JSON.stringify(data.voucher));
     }
 
-    const response = await apiClient.put<Product>(`/api/products/${id}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
+    try {
+      const response = await apiClient.put<Product>(`/api/products/${id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          }
+        },
+      });
+      return response.data;
+    } catch (error: any) {
+      throw error;
+    }
   },
 
   async delete(id: number): Promise<void> {

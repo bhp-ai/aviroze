@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Union
 
 class DiscountBase(BaseModel):
     enabled: bool
@@ -14,15 +14,27 @@ class VoucherBase(BaseModel):
     discount_value: Optional[float] = None
     expiry_date: Optional[datetime] = None
 
+class ProductImageBase(BaseModel):
+    url: str
+    color: Optional[str] = None
+    display_order: int
+    media_type: str = 'image'  # 'image', 'video', or 'gif'
+
+class ProductVariantBase(BaseModel):
+    color: Optional[str] = None
+    size: str
+    quantity: int
+
 class ProductBase(BaseModel):
     name: str
     description: str
     price: float
     category: str
     stock: int
-    images: List[str] = []  # Array of base64 image data URLs
+    images: List[ProductImageBase] = []  # Array of image objects with color info
     colors: Optional[List[str]] = []
     sizes: Optional[List[str]] = []
+    variants: Optional[List[ProductVariantBase]] = []  # Color + Size based inventory
 
 class ProductCreate(ProductBase):
     discount: Optional[DiscountBase] = None
@@ -34,7 +46,7 @@ class ProductUpdate(BaseModel):
     price: Optional[float] = None
     category: Optional[str] = None
     stock: Optional[int] = None
-    images: Optional[List[str]] = None
+    images: Optional[List[ProductImageBase]] = None
     colors: Optional[List[str]] = None
     sizes: Optional[List[str]] = None
     discount: Optional[DiscountBase] = None

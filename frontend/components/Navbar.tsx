@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShoppingBag, Menu, X, Search, User, LogOut, Package, ArrowRight } from 'lucide-react';
+import { ShoppingBag, Menu, X, Search, User, LogOut, Package, ArrowRight, Settings } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { authService } from '@/lib/services/auth';
 import { productsService, Product } from '@/lib/services/products';
@@ -84,7 +84,6 @@ export default function Navbar() {
         setSearchResults(results.slice(0, 5)); // Limit to 5 results
         setShowResults(true);
       } catch (error) {
-        console.error('Search failed:', error);
         setSearchResults([]);
       } finally {
         setIsSearching(false);
@@ -184,6 +183,14 @@ export default function Navbar() {
                       >
                         <Package className="w-4 h-4" />
                         <span>My Orders</span>
+                      </Link>
+                      <Link
+                        href="/settings"
+                        className="flex items-center space-x-2 px-4 py-2 text-sm text-foreground hover:bg-foreground/5"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        <Settings className="w-4 h-4" />
+                        <span>Settings</span>
                       </Link>
                       <button
                         onClick={handleLogout}

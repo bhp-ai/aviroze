@@ -25,7 +25,6 @@ export default function CommentsPage() {
       setComments(data);
       setFilteredComments(data);
     } catch (err: any) {
-      console.error('Failed to fetch comments:', err);
       setError('Failed to load comments');
     } finally {
       setLoading(false);
@@ -69,7 +68,6 @@ export default function CommentsPage() {
       setComments(comments.filter(c => c.id !== id));
       setFilteredComments(filteredComments.filter(c => c.id !== id));
     } catch (err: any) {
-      console.error('Failed to delete comment:', err);
       alert('Failed to delete comment');
     }
   };

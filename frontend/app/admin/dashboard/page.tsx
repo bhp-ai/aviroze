@@ -40,14 +40,12 @@ export default function DashboardPage() {
         setMonthlySales(monthly);
         setCategorySales(category);
       } catch (chartErr) {
-        console.warn('Failed to fetch chart data:', chartErr);
         // Continue with empty chart data
         setSalesData([]);
         setMonthlySales([]);
         setCategorySales([]);
       }
     } catch (err: any) {
-      console.error('Failed to fetch dashboard data:', err);
       setError(err.response?.data?.detail || 'Failed to load dashboard data');
     } finally {
       setLoading(false);

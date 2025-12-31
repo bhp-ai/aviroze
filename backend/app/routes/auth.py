@@ -21,13 +21,36 @@ async def register(
     db: Session = Depends(get_db)
 ):
     """Register a new user"""
-    # Check if user already exists
-    existing_user = db.query(User).filter(User.email == user_data.email).first()
+    # Check if user already exists (only check active users for public registration)
+    existing_user = db.query(User).filter(
+        User.email == user_data.email,
+        User.deleted_at.is_(None)  # Only check non-deleted users
+    ).first()
+
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
+
+    # Check if there's a deleted account with this email
+    deleted_user = db.query(User).filter(
+        User.email == user_data.email,
+        User.deleted_at.isnot(None)
+    ).first()
+
+    if deleted_user:
+        # If admin deleted, don't allow self-registration
+        if deleted_user.deletion_type == "admin":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This email is associated with a deleted account. Please contact support@aviroze.com for assistance."
+            )
+        # If self-deleted, allow registration as fresh account (permanently delete old one)
+        else:
+            # Permanently delete the old self-deleted account to allow fresh start
+            db.delete(deleted_user)
+            db.commit()
 
     # Create new user
     hashed_password = get_password_hash(user_data.password)
@@ -64,7 +87,7 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """Login and get access token"""
-    # Find user by email
+    # Find user by email (including soft-deleted users to provide specific error)
     user = db.query(User).filter(User.email == login_data.email).first()
 
     if not user or not verify_password(login_data.password, user.password_hash):
@@ -73,6 +96,19 @@ async def login(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Check if user is soft-deleted (block login for both admin and self-deletion)
+    if user.deleted_at is not None:
+        if user.deletion_type == "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This account has been deleted by admin. Please contact support@aviroze.com for assistance."
+            )
+        else:  # self-deleted
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This account has been deleted. You can register again with the same email to create a new account."
+            )
 
     # Check if user is active
     if user.status != "active":
@@ -105,3 +141,31 @@ async def get_current_user_info(
 ):
     """Get current logged-in user information"""
     return current_user
+
+@router.post("/change-password")
+async def change_password(
+    current_password: str,
+    new_password: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Change user password"""
+    # Verify current password
+    if not verify_password(current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+
+    # Validate new password
+    if len(new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters long"
+        )
+
+    # Update password
+    current_user.password_hash = get_password_hash(new_password)
+    db.commit()
+
+    return {"message": "Password changed successfully"}

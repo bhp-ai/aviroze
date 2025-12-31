@@ -4,12 +4,14 @@ export interface Comment {
   id: number;
   product_id: number;
   user_id: number;
+  order_id?: number;
   username: string;
   user_email: string;
   rating: number;
   comment: string;
   created_at: string;
   updated_at?: string;
+  purchase_date?: string;
 }
 
 export interface CommentWithProduct extends Comment {
@@ -21,6 +23,13 @@ export interface CommentCreate {
   product_id: number;
   rating: number;
   comment: string;
+  order_id?: number;
+}
+
+export interface EligiblePurchase {
+  order_id: number;
+  purchase_date: string;
+  has_reviewed: boolean;
 }
 
 export interface CommentUpdate {
@@ -42,6 +51,11 @@ export const commentsService = {
 
   async getById(id: number): Promise<Comment> {
     const response = await apiClient.get<Comment>(`/api/comments/${id}`);
+    return response.data;
+  },
+
+  async getEligiblePurchases(productId: number): Promise<EligiblePurchase[]> {
+    const response = await apiClient.get<EligiblePurchase[]>(`/api/comments/eligible-purchases/${productId}`);
     return response.data;
   },
 

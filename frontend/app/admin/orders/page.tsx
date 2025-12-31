@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { Package, Truck, CheckCircle, XCircle, Clock, Filter, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ordersService, Order } from '@/lib/services/orders';
 import { authService } from '@/lib/services/auth';
@@ -19,6 +18,7 @@ export default function AdminOrdersPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [ordersPerPage, setOrdersPerPage] = useState(5);
+  const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
 
   useEffect(() => {
     const user = authService.getUser();
@@ -44,7 +44,6 @@ export default function AdminOrdersPage() {
       const data = await ordersService.getAllOrders(statusFilter || undefined);
       setOrders(data);
     } catch (error) {
-      console.error('Failed to load orders:', error);
       showToast(
         error instanceof Error ? error.message : 'Failed to load orders',
         'error'
@@ -56,15 +55,31 @@ export default function AdminOrdersPage() {
 
   const handleStatusUpdate = async (orderId: number, newStatus: string) => {
     try {
+      setUpdatingOrderId(orderId);
+
+      // Optimistic update - update UI immediately
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId
+            ? { ...order, status: newStatus }
+            : order
+        )
+      );
+
       await ordersService.updateOrderStatus(orderId, newStatus);
       showToast('Order status updated successfully', 'success');
-      loadOrders(); // Reload orders
+
+      // Reload to get fresh data from server
+      loadOrders();
     } catch (error) {
-      console.error('Failed to update order status:', error);
+      // Revert on error
+      loadOrders();
       showToast(
         error instanceof Error ? error.message : 'Failed to update order status',
         'error'
       );
+    } finally {
+      setUpdatingOrderId(null);
     }
   };
 
@@ -289,16 +304,26 @@ export default function AdminOrdersPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <select
-                      value={order.status}
-                      onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase ${getStatusColor(order.status)} border-0 cursor-pointer`}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="processing">Processing</option>
-                      <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
+                    {updatingOrderId === order.id ? (
+                      <div className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase ${getStatusColor(order.status)} flex items-center gap-2`}>
+                        <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Updating...</span>
+                      </div>
+                    ) : (
+                      <select
+                        value={order.status}
+                        onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase ${getStatusColor(order.status)} border-0 cursor-pointer`}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="processing">Processing</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    )}
                   </div>
                 </div>
               </div>
@@ -311,11 +336,20 @@ export default function AdminOrdersPage() {
                     <div key={item.id} className="flex gap-4 items-center">
                       <div className="relative w-16 h-16 bg-gray-100 rounded flex-shrink-0">
                         {item.product_image ? (
-                          <Image
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
                             src={item.product_image}
                             alt={item.product_name}
-                            fill
-                            className="object-cover rounded"
+                            className="w-full h-full object-cover rounded"
+                            onError={(e) => {
+                              console.error(`[Order #${order.id}] Image load error for ${item.product_name}`);
+                              // Replace with placeholder
+                              const parent = e.currentTarget.parentElement;
+                              if (parent) {
+                                e.currentTarget.remove();
+                                parent.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg></div>';
+                              }
+                            }}
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-400">

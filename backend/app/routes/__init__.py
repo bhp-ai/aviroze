@@ -5,3 +5,6 @@ from .comments import router as comments_router
 from .analytics import router as analytics_router
 from .payments import router as payments_router
 from .orders import router as orders_router
+from .banners import router as banners_router
+from .addresses import router as addresses_router
+from .wishlists import router as wishlists_router

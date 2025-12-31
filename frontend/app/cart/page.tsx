@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { Trash2, Plus, Minus, Tag } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { formatIDR, calculateDiscountedPrice, getFinalPrice } from '@/lib/utils/currency';
@@ -10,6 +9,7 @@ import { paymentService } from '@/lib/services/payments';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/contexts/ToastContext';
+import { addressService, type Address } from '@/lib/services/addresses';
 
 export default function CartPage() {
   const { items, removeFromCart, updateQuantity, getCartTotal } = useCart();
@@ -18,6 +18,7 @@ export default function CartPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
+  const [defaultAddress, setDefaultAddress] = useState<Address | null>(null);
 
   useEffect(() => {
     const user = authService.getUser();
@@ -25,9 +26,20 @@ export default function CartPage() {
       router.push('/login');
     } else {
       setIsAuthenticated(true);
+      fetchDefaultAddress();
     }
     setIsChecking(false);
   }, [router]);
+
+  const fetchDefaultAddress = async () => {
+    try {
+      const addresses = await addressService.getAll();
+      const defaultAddr = addresses.find(addr => addr.is_default);
+      setDefaultAddress(defaultAddr || null);
+    } catch (error) {
+      console.error('Failed to fetch default address:', error);
+    }
+  };
 
   if (isChecking) {
     return (
@@ -60,7 +72,6 @@ export default function CartPage() {
       // Redirect to Stripe checkout
       window.location.href = checkout_url;
     } catch (error) {
-      console.error('Checkout error:', error);
       showToast(
         error instanceof Error ? error.message : 'Failed to start checkout',
         'error'
@@ -133,15 +144,30 @@ export default function CartPage() {
               const finalPrice = getFinalPrice(item.product.price, item.product.discount);
               const itemSubtotal = finalPrice * item.quantity;
 
+              // Get the first image - find first image type (not video/gif)
+              const productImage = item.product.images?.find(img =>
+                typeof img === 'object' && img.media_type === 'image'
+              ) || item.product.images?.[0];
+
+              const imageUrl = typeof productImage === 'string'
+                ? productImage
+                : productImage?.url;
+
               return (
                 <div key={`${item.product.id}-${item.selectedSize || 'no-size'}-${item.selectedColor || 'no-color'}-${index}`} className="flex gap-4 p-4 border border-gray-200 rounded">
                   <div className="relative w-24 h-32 bg-gray-100">
-                    <Image
-                      src={item.product.images?.[0] || 'https://via.placeholder.com/200x300?text=No+Image'}
-                      alt={item.product.name}
-                      fill
-                      className="object-cover"
-                    />
+                    {imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={imageUrl}
+                        alt={item.product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                        No Image
+                      </div>
+                    )}
                     {/* Discount Badge */}
                     {item.product.discount?.enabled && item.product.discount.type === 'percentage' && (
                       <div className="absolute top-1 left-1 bg-red-600 text-white px-1.5 py-0.5 text-xs font-bold">
@@ -253,6 +279,36 @@ export default function CartPage() {
               <span>Total</span>
               <span>IDR {formatIDR(total)}</span>
             </div>
+
+            {/* Shipping Address Info */}
+            {defaultAddress && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-xs">
+                <p className="font-semibold text-blue-900 mb-1">Shipping To:</p>
+                <p className="text-blue-800">{defaultAddress.full_name}</p>
+                <p className="text-blue-700">
+                  {defaultAddress.street_address}, {defaultAddress.city}
+                </p>
+                <p className="text-blue-700">
+                  {defaultAddress.state && `${defaultAddress.state}, `}
+                  {defaultAddress.postal_code}, {defaultAddress.country}
+                </p>
+                <p className="text-blue-600 mt-1 italic">
+                  Note: You'll need to confirm this address in Stripe checkout
+                </p>
+              </div>
+            )}
+
+            {!defaultAddress && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                <p className="text-yellow-800">
+                  <Link href="/settings/addresses" className="underline font-medium">
+                    Add a default address
+                  </Link>{' '}
+                  to speed up checkout
+                </p>
+              </div>
+            )}
+
             <button
               onClick={handleCheckout}
               disabled={isProcessingCheckout}

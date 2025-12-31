@@ -22,11 +22,14 @@ class UserUpdate(BaseModel):
 
 class UserResponse(BaseModel):
     id: int
+    public_id: str  # Public UUID for external use
     username: str
     email: EmailStr
     role: str
     status: str
     created_at: datetime
+    deleted_at: Optional[datetime] = None
+    deletion_type: Optional[str] = None
 
     class Config:
         from_attributes = True

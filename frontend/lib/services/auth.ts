@@ -20,11 +20,14 @@ export interface AuthResponse {
 
 export interface User {
   id: number;
+  public_id: string;  // Public UUID
   username: string;
   email: string;
   role: string;
   status: string;
   created_at: string;
+  deleted_at?: string | null;
+  deletion_type?: 'self' | 'admin' | null;
 }
 
 export const authService = {
@@ -96,5 +99,14 @@ export const authService = {
   isAdmin(): boolean {
     const user = this.getUser();
     return user?.role === 'admin';
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await apiClient.post('/api/auth/change-password', null, {
+      params: {
+        current_password: currentPassword,
+        new_password: newPassword,
+      },
+    });
   },
 };

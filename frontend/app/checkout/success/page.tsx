@@ -43,7 +43,6 @@ function SuccessContent() {
           setStatus('error');
         }
       } catch (error) {
-        console.error('Failed to verify payment:', error);
         setStatus('error');
       } finally {
         hasVerified.current = true;

@@ -81,14 +81,14 @@ class EmailService:
             item_total = item["price"] * item["quantity"]
             items_html += f"""
             <tr>
-                <td style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
-                    <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">{item["product_name"]}</div>
-                    <div style="font-size: 14px; color: #6b7280;">Quantity: {item["quantity"]}</div>
+                <td style="padding:10px;border-bottom:1px solid #e0e0e0">
+                    <div style="font-weight:bold;color:#000000;font-size:14px">{item["product_name"]}</div>
+                    <div style="font-size:12px;color:#666666">Quantity: {item["quantity"]}</div>
                 </td>
-                <td style="padding: 15px; border-bottom: 1px solid #e5e7eb; text-align: right; color: #111827;">
+                <td style="padding:10px;border-bottom:1px solid #e0e0e0;text-align:right;color:#000000;font-size:14px">
                     IDR {item["price"]:,.0f}
                 </td>
-                <td style="padding: 15px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600; color: #111827;">
+                <td style="padding:10px;border-bottom:1px solid #e0e0e0;text-align:right;font-weight:bold;color:#000000;font-size:14px">
                     IDR {item_total:,.0f}
                 </td>
             </tr>
@@ -102,53 +102,44 @@ class EmailService:
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Order Receipt - Aviroze</title>
+            <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet">
         </head>
-        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f9fafb;">
-            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 40px 20px;">
+        <body style="margin:0;padding:0;font-family:'Jost',sans-serif;background-color:#ffffff">
+            <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                    <td align="center">
-                        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <td align="center" style="padding:20px 10px">
+                        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;border:1px solid #e0e0e0">
                             <!-- Header -->
                             <tr>
-                                <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
-                                    <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700;">AVIROZE</h1>
-                                    <p style="margin: 10px 0 0 0; color: #e0e7ff; font-size: 16px;">Thank you for your purchase!</p>
+                                <td style="background-color:#000000;padding:20px;text-align:center">
+                                    <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:bold;letter-spacing:2px;font-family:'Jost',sans-serif">AVIROZE</h1>
                                 </td>
                             </tr>
 
-                            <!-- Order Success Message -->
+                            <!-- Order Success -->
                             <tr>
-                                <td style="padding: 40px 30px; text-align: center; background-color: #f0fdf4; border-bottom: 1px solid #e5e7eb;">
-                                    <div style="display: inline-block; background-color: #10b981; width: 60px; height: 60px; border-radius: 50%; line-height: 60px; margin-bottom: 15px;">
-                                        <span style="color: #ffffff; font-size: 30px;">✓</span>
-                                    </div>
-                                    <h2 style="margin: 0 0 10px 0; color: #065f46; font-size: 24px; font-weight: 600;">Order Confirmed!</h2>
-                                    <p style="margin: 0; color: #047857; font-size: 16px;">Order #{order_id}</p>
+                                <td style="padding:20px;text-align:center;background-color:#f5f5f5">
+                                    <h2 style="margin:0;color:#000000;font-size:20px;font-weight:bold">Order Confirmed!</h2>
+                                    <p style="margin:5px 0 0 0;color:#666666;font-size:14px">Order #{order_id}</p>
                                 </td>
                             </tr>
 
-                            <!-- Order Details -->
+                            <!-- Order Information -->
                             <tr>
-                                <td style="padding: 30px;">
+                                <td style="padding:20px">
+                                    <h3 style="margin:0 0 10px 0;color:#000000;font-size:16px;font-weight:bold">Order Information</h3>
                                     <table width="100%" cellpadding="0" cellspacing="0">
                                         <tr>
-                                            <td style="padding-bottom: 20px;">
-                                                <h3 style="margin: 0 0 15px 0; color: #111827; font-size: 18px; font-weight: 600;">Order Information</h3>
-                                                <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 14px;">
-                                                    <tr>
-                                                        <td style="padding: 8px 0; color: #6b7280;">Order Date:</td>
-                                                        <td style="padding: 8px 0; text-align: right; color: #111827; font-weight: 500;">{order_date}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td style="padding: 8px 0; color: #6b7280;">Order Number:</td>
-                                                        <td style="padding: 8px 0; text-align: right; color: #111827; font-weight: 500;">#{order_id}</td>
-                                                    </tr>
-                                                    <tr>
-                                                        <td style="padding: 8px 0; color: #6b7280;">Payment Method:</td>
-                                                        <td style="padding: 8px 0; text-align: right; color: #111827; font-weight: 500;">{payment_method}</td>
-                                                    </tr>
-                                                </table>
-                                            </td>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Order Date:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px">{order_date}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Order Number:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px">#{order_id}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Payment Method:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px">{payment_method}</td>
                                         </tr>
                                     </table>
                                 </td>
@@ -156,14 +147,14 @@ class EmailService:
 
                             <!-- Order Items -->
                             <tr>
-                                <td style="padding: 0 30px 30px 30px;">
-                                    <h3 style="margin: 0 0 15px 0; color: #111827; font-size: 18px; font-weight: 600;">Order Items</h3>
-                                    <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                                <td style="padding:0 20px 20px 20px">
+                                    <h3 style="margin:0 0 10px 0;color:#000000;font-size:16px;font-weight:bold">Order Items</h3>
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e0e0e0">
                                         <thead>
-                                            <tr style="background-color: #f9fafb;">
-                                                <th style="padding: 12px 15px; text-align: left; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Product</th>
-                                                <th style="padding: 12px 15px; text-align: right; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Price</th>
-                                                <th style="padding: 12px 15px; text-align: right; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Total</th>
+                                            <tr style="background-color:#f5f5f5">
+                                                <th style="padding:10px;text-align:left;font-size:12px;color:#666666;border-bottom:1px solid #e0e0e0">Product</th>
+                                                <th style="padding:10px;text-align:right;font-size:12px;color:#666666;border-bottom:1px solid #e0e0e0">Price</th>
+                                                <th style="padding:10px;text-align:right;font-size:12px;color:#666666;border-bottom:1px solid #e0e0e0">Total</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -175,19 +166,19 @@ class EmailService:
 
                             <!-- Order Summary -->
                             <tr>
-                                <td style="padding: 0 30px 30px 30px;">
-                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border-radius: 8px; padding: 20px;">
+                                <td style="padding:0 20px 20px 20px">
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:15px">
                                         <tr>
-                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Subtotal:</td>
-                                            <td style="padding: 8px 0; text-align: right; color: #111827; font-size: 14px; font-weight: 500;">IDR {subtotal:,.0f}</td>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Subtotal:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px">IDR {subtotal:,.0f}</td>
                                         </tr>
                                         <tr>
-                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Shipping:</td>
-                                            <td style="padding: 8px 0; text-align: right; color: #111827; font-size: 14px; font-weight: 500;">IDR {shipping:,.0f}</td>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Shipping:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px">IDR {shipping:,.0f}</td>
                                         </tr>
-                                        <tr style="border-top: 2px solid #e5e7eb;">
-                                            <td style="padding: 15px 0 0 0; color: #111827; font-size: 18px; font-weight: 700;">Total:</td>
-                                            <td style="padding: 15px 0 0 0; text-align: right; color: #10b981; font-size: 24px; font-weight: 700;">IDR {total:,.0f}</td>
+                                        <tr style="border-top:2px solid #000000">
+                                            <td style="padding:10px 0 0 0;color:#000000;font-size:16px;font-weight:bold">Total:</td>
+                                            <td style="padding:10px 0 0 0;text-align:right;color:#000000;font-size:16px;font-weight:bold">IDR {total:,.0f}</td>
                                         </tr>
                                     </table>
                                 </td>
@@ -195,10 +186,10 @@ class EmailService:
 
                             <!-- Shipping Address -->
                             <tr>
-                                <td style="padding: 0 30px 30px 30px;">
-                                    <h3 style="margin: 0 0 15px 0; color: #111827; font-size: 18px; font-weight: 600;">Shipping Address</h3>
-                                    <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; font-size: 14px; color: #374151; line-height: 1.6;">
-                                        <strong style="color: #111827;">{customer_name}</strong><br>
+                                <td style="padding:0 20px 20px 20px">
+                                    <h3 style="margin:0 0 10px 0;color:#000000;font-size:16px;font-weight:bold">Shipping Address</h3>
+                                    <div style="background-color:#f5f5f5;padding:15px;font-size:14px;color:#000000">
+                                        <strong>{customer_name}</strong><br>
                                         {shipping_address}
                                     </div>
                                 </td>
@@ -206,11 +197,11 @@ class EmailService:
 
                             <!-- Footer -->
                             <tr>
-                                <td style="padding: 30px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
-                                    <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 14px;">
-                                        Questions about your order? Contact us at <a href="mailto:support@aviroze.com" style="color: #667eea; text-decoration: none;">support@aviroze.com</a>
+                                <td style="padding:20px;background-color:#f5f5f5;text-align:center;border-top:1px solid #e0e0e0">
+                                    <p style="margin:0 0 5px 0;color:#666666;font-size:12px">
+                                        Questions? Contact us at <a href="mailto:support@aviroze.com" style="color:#000000;text-decoration:underline">support@aviroze.com</a>
                                     </p>
-                                    <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                                    <p style="margin:0;color:#999999;font-size:11px">
                                         © 2025 Aviroze. All rights reserved.
                                     </p>
                                 </td>
@@ -252,40 +243,26 @@ class EmailService:
         items = order_data.get("items", [])
         subtotal = order_data.get("subtotal", 0)
         shipping = order_data.get("shipping", 50000)
+        shipping_address = order_data.get("shipping_address", "")
+        payment_method = order_data.get("payment_method", "Credit Card")
 
         # Status-specific content
         status_config = {
             "pending": {
-                "color": "#f59e0b",
-                "bg_color": "#fef3c7",
-                "icon": "⏳",
-                "title": "Order Received",
-                "message": "We've received your order and it's waiting to be processed.",
-                "next_step": "We'll start processing your order soon and send you another update."
+                "title": "Order Status Updated",
+                "message": "We've received your order and it's waiting to be processed."
             },
             "processing": {
-                "color": "#3b82f6",
-                "bg_color": "#dbeafe",
-                "icon": "📦",
-                "title": "Order is Being Processed",
-                "message": "Great news! Your order is now being prepared for shipment.",
-                "next_step": "Your items are being carefully packed and will be shipped within 1-2 business days."
+                "title": "Order Status Updated",
+                "message": "Great news! Your order is now being prepared for shipment."
             },
             "completed": {
-                "color": "#10b981",
-                "bg_color": "#d1fae5",
-                "icon": "✓",
-                "title": "Order Delivered",
-                "message": "Your order has been successfully delivered!",
-                "next_step": "We hope you love your purchase! If you have any issues, please contact our support team."
+                "title": "Order Status Updated",
+                "message": "Your order has been successfully delivered!"
             },
             "cancelled": {
-                "color": "#ef4444",
-                "bg_color": "#fee2e2",
-                "icon": "✕",
-                "title": "Order Cancelled",
-                "message": "Your order has been cancelled.",
-                "next_step": "If this was a mistake or you have questions, please contact our support team immediately."
+                "title": "Order Status Updated",
+                "message": "Your order has been cancelled."
             }
         }
 
@@ -296,38 +273,35 @@ class EmailService:
         if items:
             for item in items:
                 item_total = item["price"] * item["quantity"]
-                items_html += f"""
-                <tr>
-                    <td style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
-                        <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">{item["product_name"]}</div>
-                        <div style="font-size: 14px; color: #6b7280;">Quantity: {item["quantity"]}</div>
-                    </td>
-                    <td style="padding: 15px; border-bottom: 1px solid #e5e7eb; text-align: right; color: #111827;">
-                        IDR {item["price"]:,.0f}
-                    </td>
-                    <td style="padding: 15px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600; color: #111827;">
-                        IDR {item_total:,.0f}
-                    </td>
-                </tr>
-                """
+                product_image = item.get("product_image", "")
 
-        # Add tracking info for completed/processing
-        tracking_html = ""
-        if status.lower() in ["processing", "completed"] and tracking_number:
-            tracking_html = f"""
+                items_html += f"""
             <tr>
-                <td style="padding: 0 30px 30px 30px;">
-                    <div style="background-color: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 20px;">
-                        <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 16px; font-weight: 600;">
-                            📍 Tracking Information
-                        </h3>
-                        <p style="margin: 0; color: #374151; font-size: 14px;">
-                            Tracking Number: <strong>{tracking_number}</strong>
-                        </p>
-                    </div>
+                <td style="padding:10px;border-bottom:1px solid #e0e0e0">
+                    <table cellpadding="0" cellspacing="0">
+                        <tr>
+                            <td style="width:60px;padding-right:10px;vertical-align:top">
+                                {f'<img src="{product_image}" alt="{item["product_name"]}" width="60" height="60" style="display:block;border-radius:4px;object-fit:cover">' if product_image else ''}
+                            </td>
+                            <td style="vertical-align:top">
+                                <div style="font-weight:bold;color:#000000;font-size:14px">{item["product_name"]}</div>
+                                <div style="font-size:12px;color:#666666">Quantity: {item["quantity"]}</div>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+                <td style="padding:10px;border-bottom:1px solid #e0e0e0;text-align:right;color:#000000;font-size:14px;vertical-align:top">
+                    IDR {item["price"]:,.0f}
+                </td>
+                <td style="padding:10px;border-bottom:1px solid #e0e0e0;text-align:right;font-weight:bold;color:#000000;font-size:14px;vertical-align:top">
+                    IDR {item_total:,.0f}
                 </td>
             </tr>
             """
+
+        print(f"[DEBUG EMAIL] Items count: {len(items) if items else 0}")
+        print(f"[DEBUG EMAIL] Items HTML length: {len(items_html)}")
+        print(f"[DEBUG EMAIL] Shipping address: '{shipping_address}'")
 
         html = f"""
         <!DOCTYPE html>
@@ -336,59 +310,72 @@ class EmailService:
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Order Update - Aviroze</title>
+            <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet">
         </head>
-        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f9fafb;">
-            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 40px 20px;">
+        <body style="margin:0;padding:0;font-family:'Jost',sans-serif;background-color:#ffffff">
+            <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                    <td align="center">
-                        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <td align="center" style="padding:20px 10px">
+                        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;border:1px solid #e0e0e0">
                             <!-- Header -->
                             <tr>
-                                <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
-                                    <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700;">AVIROZE</h1>
-                                    <p style="margin: 10px 0 0 0; color: #e0e7ff; font-size: 16px;">Order Status Update</p>
+                                <td style="background-color:#000000;padding:20px;text-align:center">
+                                    <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:bold;letter-spacing:2px;font-family:'Jost',sans-serif">AVIROZE</h1>
                                 </td>
                             </tr>
 
-                            <!-- Status Badge -->
+                            <!-- Status Message -->
                             <tr>
-                                <td style="padding: 40px 30px; text-align: center; background-color: {config['bg_color']}; border-bottom: 1px solid #e5e7eb;">
-                                    <div style="display: inline-block; background-color: {config['color']}; width: 60px; height: 60px; border-radius: 50%; line-height: 60px; margin-bottom: 15px;">
-                                        <span style="color: #ffffff; font-size: 30px;">{config['icon']}</span>
-                                    </div>
-                                    <h2 style="margin: 0 0 10px 0; color: {config['color']}; font-size: 24px; font-weight: 600;">{config['title']}</h2>
-                                    <p style="margin: 0; color: #374151; font-size: 16px;">Order #{order_id}</p>
+                                <td style="padding:20px;text-align:center;background-color:#f5f5f5">
+                                    <h2 style="margin:0;color:#000000;font-size:20px;font-weight:bold">{config['title']}</h2>
+                                    <p style="margin:5px 0 0 0;color:#666666;font-size:14px">Order #{order_id}</p>
                                 </td>
                             </tr>
 
                             <!-- Message -->
                             <tr>
-                                <td style="padding: 30px;">
-                                    <p style="margin: 0 0 15px 0; color: #111827; font-size: 16px; line-height: 1.6;">
-                                        Hi <strong>{customer_name}</strong>,
-                                    </p>
-                                    <p style="margin: 0 0 15px 0; color: #374151; font-size: 15px; line-height: 1.6;">
+                                <td style="padding:20px">
+                                    <p style="margin:0 0 10px 0;color:#666666;font-size:14px">
                                         {config['message']}
-                                    </p>
-                                    <p style="margin: 0; color: #374151; font-size: 15px; line-height: 1.6;">
-                                        {config['next_step']}
                                     </p>
                                 </td>
                             </tr>
 
-                            {tracking_html}
+                            <!-- Order Information -->
+                            <tr>
+                                <td style="padding:0 20px 20px 20px">
+                                    <h3 style="margin:0 0 10px 0;color:#000000;font-size:16px;font-weight:bold">Order Information</h3>
+                                    <table width="100%" cellpadding="0" cellspacing="0">
+                                        <tr>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Order Date:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px">{order_date}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Order Number:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px">#{order_id}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Payment Method:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px">{payment_method}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Status:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px;font-weight:bold">{status.upper()}</td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
 
                             <!-- Order Items -->
-                            {f'''
-                            <tr>
-                                <td style="padding: 0 30px 30px 30px;">
-                                    <h3 style="margin: 0 0 15px 0; color: #111827; font-size: 18px; font-weight: 600;">Order Items</h3>
-                                    <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                            {f'''<tr>
+                                <td style="padding:0 20px 20px 20px">
+                                    <h3 style="margin:0 0 10px 0;color:#000000;font-size:16px;font-weight:bold">Order Items</h3>
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e0e0e0">
                                         <thead>
-                                            <tr style="background-color: #f9fafb;">
-                                                <th style="padding: 12px 15px; text-align: left; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Product</th>
-                                                <th style="padding: 12px 15px; text-align: right; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Price</th>
-                                                <th style="padding: 12px 15px; text-align: right; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase;">Total</th>
+                                            <tr style="background-color:#f5f5f5">
+                                                <th style="padding:10px;text-align:left;font-size:12px;color:#666666;border-bottom:1px solid #e0e0e0">Product</th>
+                                                <th style="padding:10px;text-align:right;font-size:12px;color:#666666;border-bottom:1px solid #e0e0e0">Price</th>
+                                                <th style="padding:10px;text-align:right;font-size:12px;color:#666666;border-bottom:1px solid #e0e0e0">Total</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -400,80 +387,50 @@ class EmailService:
 
                             <!-- Order Summary -->
                             <tr>
-                                <td style="padding: 0 30px 30px 30px;">
-                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border-radius: 8px; padding: 20px;">
+                                <td style="padding:0 20px 20px 20px">
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:15px">
                                         <tr>
-                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Subtotal:</td>
-                                            <td style="padding: 8px 0; text-align: right; color: #111827; font-size: 14px; font-weight: 500;">IDR {subtotal:,.0f}</td>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Subtotal:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px">IDR {subtotal:,.0f}</td>
                                         </tr>
                                         <tr>
-                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Shipping:</td>
-                                            <td style="padding: 8px 0; text-align: right; color: #111827; font-size: 14px; font-weight: 500;">IDR {shipping:,.0f}</td>
+                                            <td style="padding:5px 0;color:#666666;font-size:14px">Shipping:</td>
+                                            <td style="padding:5px 0;text-align:right;color:#000000;font-size:14px">IDR {shipping:,.0f}</td>
                                         </tr>
-                                        <tr style="border-top: 2px solid #e5e7eb;">
-                                            <td style="padding: 15px 0 0 0; color: #111827; font-size: 18px; font-weight: 700;">Total:</td>
-                                            <td style="padding: 15px 0 0 0; text-align: right; color: #10b981; font-size: 24px; font-weight: 700;">IDR {total:,.0f}</td>
+                                        <tr style="border-top:2px solid #000000">
+                                            <td style="padding:10px 0 0 0;color:#000000;font-size:16px;font-weight:bold">Total:</td>
+                                            <td style="padding:10px 0 0 0;text-align:right;color:#000000;font-size:16px;font-weight:bold">IDR {total:,.0f}</td>
                                         </tr>
                                     </table>
                                 </td>
-                            </tr>
-                            ''' if items else f'''
-                            <tr>
-                                <td style="padding: 0 30px 30px 30px;">
-                                    <h3 style="margin: 0 0 15px 0; color: #111827; font-size: 18px; font-weight: 600;">Order Details</h3>
-                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border-radius: 8px; padding: 20px;">
-                                        <tr>
-                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Order Number:</td>
-                                            <td style="padding: 8px 0; text-align: right; color: #111827; font-size: 14px; font-weight: 500;">#{order_id}</td>
-                                        </tr>
-                                        <tr>
-                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Order Date:</td>
-                                            <td style="padding: 8px 0; text-align: right; color: #111827; font-size: 14px; font-weight: 500;">{order_date}</td>
-                                        </tr>
-                                        <tr>
-                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Status:</td>
-                                            <td style="padding: 8px 0; text-align: right;">
-                                                <span style="display: inline-block; background-color: {config['color']}; color: #ffffff; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: uppercase;">
-                                                    {status}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Total:</td>
-                                            <td style="padding: 8px 0; text-align: right; color: #10b981; font-size: 16px; font-weight: 700;">IDR {total:,.0f}</td>
-                                        </tr>
-                                    </table>
+                            </tr>''' if items else ''}
+
+                            <!-- Shipping Address -->
+                            {f'''<tr>
+                                <td style="padding:0 20px 20px 20px">
+                                    <h3 style="margin:0 0 10px 0;color:#000000;font-size:16px;font-weight:bold">Shipping Address</h3>
+                                    <div style="background-color:#f5f5f5;padding:15px;font-size:14px;color:#000000">
+                                        <strong>{customer_name}</strong><br>
+                                        {shipping_address}
+                                    </div>
                                 </td>
-                            </tr>
-                            '''}
+                            </tr>''' if shipping_address else ''}
 
                             <!-- Action Buttons -->
                             <tr>
-                                <td style="padding: 0 30px 30px 30px; text-align: center;">
-                                    <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
-                                        <tr>
-                                            <td style="padding-right: 10px;">
-                                                <a href="http://localhost:3000/orders" style="display: inline-block; background-color: #111827; color: #ffffff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
-                                                    View Order Details
-                                                </a>
-                                            </td>
-                                            <td style="padding-left: 10px;">
-                                                <a href="http://localhost:8000/api/orders/{order_id}/receipt/pdf" style="display: inline-block; background-color: #ffffff; color: #111827; border: 2px solid #111827; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
-                                                    📄 Download Receipt
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    </table>
+                                <td style="padding:0 20px 20px 20px;text-align:center">
+                                    <a href="http://localhost:3000/orders" style="display:inline-block;background-color:#000000;color:#ffffff;padding:12px 24px;margin:5px;text-decoration:none;font-weight:bold;font-size:13px;border-radius:4px">View Order Details</a>
+                                    <a href="http://localhost:8000/api/orders/{order_id}/receipt/pdf" style="display:inline-block;background-color:#ffffff;color:#000000;border:2px solid #000000;padding:10px 22px;margin:5px;text-decoration:none;font-weight:bold;font-size:13px;border-radius:4px">Download Receipt</a>
                                 </td>
                             </tr>
 
                             <!-- Footer -->
                             <tr>
-                                <td style="padding: 30px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
-                                    <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 14px;">
-                                        Questions about your order? Contact us at <a href="mailto:support@aviroze.com" style="color: #667eea; text-decoration: none;">support@aviroze.com</a>
+                                <td style="padding:20px;background-color:#f5f5f5;text-align:center;border-top:1px solid #e0e0e0">
+                                    <p style="margin:0 0 5px 0;color:#666666;font-size:12px">
+                                        Questions? Contact us at <a href="mailto:support@aviroze.com" style="color:#000000;text-decoration:underline">support@aviroze.com</a>
                                     </p>
-                                    <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                                    <p style="margin:0;color:#999999;font-size:11px">
                                         © 2025 Aviroze. All rights reserved.
                                     </p>
                                 </td>

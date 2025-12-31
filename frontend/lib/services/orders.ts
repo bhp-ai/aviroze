@@ -123,4 +123,26 @@ export const ordersService = {
       throw new Error(error.detail || 'Failed to update order status');
     }
   },
+
+  /**
+   * Check if user has purchased and received a specific product
+   */
+  async hasPurchasedProduct(productId: number): Promise<boolean> {
+    const token = authService.getToken();
+    if (!token) {
+      return false;
+    }
+
+    try {
+      const orders = await this.getMyOrders();
+
+      // Check if user has any completed/delivered order containing this product
+      return orders.some(order =>
+        (order.status.toLowerCase() === 'delivered' || order.status.toLowerCase() === 'completed') &&
+        order.items.some(item => item.product_id === productId)
+      );
+    } catch (error) {
+      return false;
+    }
+  },
 };

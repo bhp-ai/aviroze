@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import ProductCard from '@/components/ProductCard';
+import BannerCarousel from '@/components/BannerCarousel';
 import { productsService, Product } from '@/lib/services/products';
 import { useState, useEffect } from 'react';
 
@@ -21,7 +22,6 @@ export default function Home() {
         setBestsellers(bestsellersData);
         setNewArrivals(newArrivalsData);
       } catch (error) {
-        console.error('Error fetching products:', error);
       } finally {
         setLoading(false);
       }
@@ -32,6 +32,9 @@ export default function Home() {
 
   return (
     <>
+      {/* Banner Carousel */}
+      <BannerCarousel />
+
       {/* Hero Section */}
       <section className="relative h-[85vh] min-h-[650px]">
         {/* Full Width Background Image */}

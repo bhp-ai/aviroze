@@ -3,21 +3,32 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ShoppingBag, Heart, Star, User, Share2 } from 'lucide-react';
 import { productsService, Product } from '@/lib/services/products';
 import { commentsService, Comment, CommentCreate } from '@/lib/services/comments';
 import { authService } from '@/lib/services/auth';
+import { wishlistService } from '@/lib/services/wishlist';
+import { ordersService } from '@/lib/services/orders';
 import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useProductMedia } from '@/contexts/ProductMediaContext';
 import { formatIDR, calculateDiscountedPrice } from '@/lib/utils/currency';
+import CustomVideoPlayer from '@/components/CustomVideoPlayer';
 
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const productId = parseInt(params.slug as string);
+  const searchParams = useSearchParams();
+
+  // Get product ID from query parameter, fallback to parsing slug as ID
+  const productId = searchParams.get('id')
+    ? parseInt(searchParams.get('id')!)
+    : parseInt(params.slug as string);
+
   const { addToCart } = useCart();
   const toast = useToast();
+  const { getCachedProduct, cacheProduct, getImagesByColor } = useProductMedia();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -37,25 +48,102 @@ export default function ProductDetailPage() {
   const [hoverRating, setHoverRating] = useState(0);
   const [submittingComment, setSubmittingComment] = useState(false);
 
+  // Wishlist state
+  const [isInWishlist, setIsInWishlist] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+
+  // Purchase verification state
+  const [hasPurchased, setHasPurchased] = useState(false);
+  const [checkingPurchase, setCheckingPurchase] = useState(true);
+
   useEffect(() => {
     fetchProduct();
     fetchComments();
     checkUser();
+    checkWishlistStatus();
+    checkPurchaseStatus();
   }, [productId]);
+
+  // Removed useEffect for color changes - now handled directly in handleColorChange
 
   const checkUser = () => {
     const user = authService.getUser();
     setCurrentUser(user);
   };
 
+  const checkWishlistStatus = async () => {
+    if (!authService.isAuthenticated()) {
+      setIsInWishlist(false);
+      return;
+    }
+
+    try {
+      const inWishlist = await wishlistService.check(productId);
+      setIsInWishlist(inWishlist);
+    } catch (error) {
+      // User might not be logged in or other error
+      setIsInWishlist(false);
+    }
+  };
+
+  const checkPurchaseStatus = async () => {
+    if (!authService.isAuthenticated()) {
+      setHasPurchased(false);
+      setCheckingPurchase(false);
+      return;
+    }
+
+    try {
+      setCheckingPurchase(true);
+      const purchased = await ordersService.hasPurchasedProduct(productId);
+      setHasPurchased(purchased);
+    } catch (error) {
+      setHasPurchased(false);
+    } finally {
+      setCheckingPurchase(false);
+    }
+  };
+
   const fetchProduct = async () => {
     try {
       setLoading(true);
       setError('');
+
+      // Fetch all images without color filter to get complete data
       const data = await productsService.getById(productId);
-      setProduct(data);
+
+      // Cache all images if not already cached
+      const cached = getCachedProduct(productId);
+      if (!cached && data.images && data.images.length > 0) {
+        cacheProduct(productId, data.images, data.colors || []);
+      }
+
+      // Set default color and filter images
+      if (data.colors && data.colors.length > 0) {
+        const firstColor = data.colors[0];
+        setSelectedColor(firstColor);
+
+        // Filter images by first color
+        const allImages = cached ? cached.allImages : data.images;
+        const filteredImages = allImages.filter(img =>
+          !img.color || img.color.toLowerCase() === firstColor.toLowerCase()
+        ).sort((a, b) => {
+          const aIsMedia = a.media_type === 'video' || a.media_type === 'gif';
+          const bIsMedia = b.media_type === 'video' || b.media_type === 'gif';
+          if (aIsMedia && !bIsMedia) return -1;
+          if (!aIsMedia && bIsMedia) return 1;
+          return a.display_order - b.display_order;
+        });
+
+        setProduct({
+          ...data,
+          images: filteredImages.length > 0 ? filteredImages : data.images
+        });
+      } else {
+        // No colors, show all images
+        setProduct(data);
+      }
     } catch (err: any) {
-      console.error('Failed to fetch product:', err);
       setError('Failed to load product');
     } finally {
       setLoading(false);
@@ -67,8 +155,22 @@ export default function ProductDetailPage() {
       const data = await commentsService.getAll(productId);
       setComments(data);
     } catch (err: any) {
-      console.error('Failed to fetch comments:', err);
     }
+  };
+
+  const handleColorChange = (color: string) => {
+    // Immediately filter and update images from cache
+    const filteredImages = getImagesByColor(productId, color);
+
+    if (product && filteredImages.length > 0) {
+      setProduct({
+        ...product,
+        images: filteredImages
+      });
+      setSelectedImageIndex(0);
+    }
+
+    setSelectedColor(color);
   };
 
   const handleAddToCart = () => {
@@ -113,13 +215,31 @@ export default function ProductDetailPage() {
     }
   };
 
-  const handleAddToWishlist = () => {
+  const handleAddToWishlist = async () => {
     if (!currentUser) {
       toast.warning('Please login to add items to wishlist');
       return;
     }
-    // TODO: Implement wishlist functionality
-    toast.info('Wishlist feature coming soon!');
+
+    try {
+      setWishlistLoading(true);
+
+      if (isInWishlist) {
+        // Remove from wishlist
+        await wishlistService.remove(productId);
+        setIsInWishlist(false);
+        toast.success('Removed from wishlist');
+      } else {
+        // Add to wishlist
+        await wishlistService.add(productId);
+        setIsInWishlist(true);
+        toast.success('Added to wishlist');
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to update wishlist');
+    } finally {
+      setWishlistLoading(false);
+    }
   };
 
   const handleSubmitComment = async (e: React.FormEvent) => {
@@ -144,7 +264,6 @@ export default function ProductDetailPage() {
       setCommentText('');
       setRating(0);
     } catch (err: any) {
-      console.error('Failed to submit comment:', err);
       alert('Failed to submit review');
     } finally {
       setSubmittingComment(false);
@@ -225,17 +344,32 @@ export default function ProductDetailPage() {
       </nav>
 
       <div className="grid md:grid-cols-2 gap-12 mb-12">
-        {/* Image Gallery */}
+        {/* Media Gallery */}
         <div>
           <div className="relative aspect-[3/4] bg-gray-100 mb-4">
             {product.images && product.images.length > 0 ? (
-              <Image
-                src={product.images[selectedImageIndex]}
-                alt={product.name}
-                fill
-                className="object-cover"
-                priority
-              />
+              <>
+                {product.images[selectedImageIndex].media_type === 'video' ? (
+                  <CustomVideoPlayer
+                    src={product.images[selectedImageIndex].url}
+                    className="w-full h-full"
+                  />
+                ) : product.images[selectedImageIndex].media_type === 'gif' ? (
+                  <img
+                    src={product.images[selectedImageIndex].url}
+                    alt={product.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Image
+                    src={product.images[selectedImageIndex].url}
+                    alt={product.name}
+                    fill
+                    className="object-cover"
+                    priority
+                  />
+                )}
+              </>
             ) : (
               <div className="flex items-center justify-center h-full">
                 <ShoppingBag className="w-16 h-16 text-gray-400" />
@@ -249,24 +383,44 @@ export default function ProductDetailPage() {
             )}
           </div>
 
-          {/* Image Thumbnails */}
+          {/* Media Thumbnails */}
           {product.images && product.images.length > 1 && (
             <div className="flex gap-2 overflow-x-auto">
               {product.images.map((img, idx) => (
                 <button
                   key={idx}
                   onClick={() => setSelectedImageIndex(idx)}
-                  className={`flex-shrink-0 w-20 h-20 border-2 rounded overflow-hidden ${
+                  className={`relative flex-shrink-0 w-20 h-20 border-2 rounded overflow-hidden ${
                     selectedImageIndex === idx ? 'border-gray-900' : 'border-gray-200'
                   }`}
                 >
-                  <Image
-                    src={img}
-                    alt={`${product.name} ${idx + 1}`}
-                    width={80}
-                    height={80}
-                    className="object-cover w-full h-full"
-                  />
+                  {img.media_type === 'video' ? (
+                    <video
+                      src={img.url}
+                      className="w-full h-full object-cover"
+                      muted
+                    />
+                  ) : img.media_type === 'gif' ? (
+                    <img
+                      src={img.url}
+                      alt={`${product.name} ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Image
+                      src={img.url}
+                      alt={`${product.name} ${idx + 1}`}
+                      width={80}
+                      height={80}
+                      className="object-cover w-full h-full"
+                    />
+                  )}
+                  {/* Media type indicator */}
+                  {(img.media_type === 'video' || img.media_type === 'gif') && (
+                    <div className="absolute bottom-1 right-1 bg-black bg-opacity-60 text-white text-xs px-1 rounded">
+                      {img.media_type === 'video' ? '▶' : 'GIF'}
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
@@ -319,7 +473,7 @@ export default function ProductDetailPage() {
                 {product.colors.map((color, index) => (
                   <button
                     key={index}
-                    onClick={() => setSelectedColor(color)}
+                    onClick={() => handleColorChange(color)}
                     className={`flex items-center gap-2 px-4 py-2 border transition-all text-sm ${
                       selectedColor === color
                         ? 'border-foreground bg-foreground/5'
@@ -401,10 +555,13 @@ export default function ProductDetailPage() {
             </button>
             <button
               onClick={handleAddToWishlist}
-              className="border border-border px-4 py-3 hover:border-foreground transition-colors"
-              title="Add to wishlist"
+              disabled={wishlistLoading}
+              className={`border px-4 py-3 hover:border-foreground transition-colors ${
+                isInWishlist ? 'border-red-500 bg-red-50' : 'border-border'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
             >
-              <Heart className="w-5 h-5" />
+              <Heart className={`w-5 h-5 ${isInWishlist ? 'fill-red-500 text-red-500' : ''}`} />
             </button>
             <button
               onClick={() => {
@@ -413,7 +570,7 @@ export default function ProductDetailPage() {
                     title: product.name,
                     text: product.description,
                     url: window.location.href,
-                  }).catch((error) => console.log('Error sharing', error));
+                  });
                 } else {
                   navigator.clipboard.writeText(window.location.href);
                   toast.success('Link copied to clipboard!');
@@ -458,37 +615,61 @@ export default function ProductDetailPage() {
 
         {/* Write Review Form */}
         {currentUser ? (
-          <div className="bg-gray-50 rounded-lg p-6 mb-8">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Write a Review</h3>
-            <form onSubmit={handleSubmitComment} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Rating
-                </label>
-                {renderStars(rating, true)}
+          checkingPurchase ? (
+            <div className="bg-gray-50 rounded-lg p-6 mb-8 text-center">
+              <p className="text-gray-600">Checking purchase history...</p>
+            </div>
+          ) : !hasPurchased ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 mb-8">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  <svg className="w-5 h-5 text-amber-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                    Purchase Required to Review
+                  </h3>
+                  <p className="text-sm text-amber-800">
+                    You need to purchase and receive this product before you can write a review. This helps ensure authentic feedback from verified buyers.
+                  </p>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Your Review
-                </label>
-                <textarea
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 transition-colors"
-                  placeholder="Share your experience with this product..."
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={submittingComment || !rating}
-                className="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submittingComment ? 'Submitting...' : 'Submit Review'}
-              </button>
-            </form>
-          </div>
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-6 mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Write a Review</h3>
+              <form onSubmit={handleSubmitComment} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Rating
+                  </label>
+                  {renderStars(rating, true)}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Your Review
+                  </label>
+                  <textarea
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 transition-colors"
+                    placeholder="Share your experience with this product..."
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={submittingComment || !rating}
+                  className="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submittingComment ? 'Submitting...' : 'Submit Review'}
+                </button>
+              </form>
+            </div>
+          )
         ) : (
           <div className="bg-gray-50 rounded-lg p-6 mb-8 text-center">
             <p className="text-gray-600">

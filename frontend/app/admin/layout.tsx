@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, LogOut, Menu, X, Package, MessageSquare, ShoppingBag, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, Menu, X, Package, MessageSquare, ShoppingBag, FileText, Image } from 'lucide-react';
 import { authService } from '@/lib/services/auth';
 import { usePageTracking } from '@/hooks/usePageTracking';
 
@@ -56,6 +56,7 @@ export default function AdminLayout({
   const menuItems = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Products', href: '/admin/products', icon: Package },
+    { name: 'Banners', href: '/admin/banners', icon: Image },
     { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
     { name: 'Logs', href: '/admin/logs', icon: FileText },
     { name: 'Users', href: '/admin/users', icon: Users },

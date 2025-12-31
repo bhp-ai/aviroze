@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { CartProvider } from '@/contexts/CartContext';
 import { ToastProvider } from '@/contexts/ToastContext';
+import { ProductMediaProvider } from '@/contexts/ProductMediaContext';
 import { usePageTracking } from '@/hooks/usePageTracking';
 
 export default function LayoutWrapper({
@@ -29,16 +30,18 @@ export default function LayoutWrapper({
   return (
     <ToastProvider>
       <CartProvider>
-        {!hideNavAndFooter && (
-          <>
-            <AnnouncementBanner />
-            <Navbar />
-          </>
-        )}
-        <main className={hideNavAndFooter ? '' : 'min-h-screen'}>
-          {children}
-        </main>
-        {!hideNavAndFooter && <Footer />}
+        <ProductMediaProvider>
+          {!hideNavAndFooter && (
+            <>
+              <AnnouncementBanner />
+              <Navbar />
+            </>
+          )}
+          <main className={hideNavAndFooter ? '' : 'min-h-screen'}>
+            {children}
+          </main>
+          {!hideNavAndFooter && <Footer />}
+        </ProductMediaProvider>
       </CartProvider>
     </ToastProvider>
   );
