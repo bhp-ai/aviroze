@@ -143,6 +143,16 @@ export default function ProductDetailPage() {
         // No colors, show all images
         setProduct(data);
       }
+
+      // Auto-select first size if available
+      if (data.sizes && data.sizes.length > 0) {
+        setSelectedSize(data.sizes[0]);
+      } else if (data.variants && data.variants.length > 0) {
+        const firstSize = data.variants[0].size;
+        if (firstSize) {
+          setSelectedSize(firstSize);
+        }
+      }
     } catch (err: any) {
       setError('Failed to load product');
     } finally {
@@ -183,13 +193,17 @@ export default function ProductDetailPage() {
     }
 
     // Check if color is required and not selected
-    if (product.colors && product.colors.length > 0 && !selectedColor) {
+    const hasColors = (product.colors && product.colors.length > 0) ||
+                      (product.variants && product.variants.some(v => v.color));
+    if (hasColors && !selectedColor) {
       toast.error('Please select a color');
       return;
     }
 
     // Check if size is required and not selected
-    if (product.sizes && product.sizes.length > 0 && !selectedSize) {
+    const hasSizes = (product.sizes && product.sizes.length > 0) ||
+                     (product.variants && product.variants.length > 0);
+    if (hasSizes && !selectedSize) {
       toast.error('Please select a size');
       return;
     }
@@ -464,61 +478,86 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Color Selection */}
-          {product.colors && product.colors.length > 0 && (
-            <div className="mb-6">
-              <label className="block text-sm uppercase tracking-widest text-gray-600 mb-3 text-xs">
-                COLOR
-              </label>
-              <div className="flex gap-2 flex-wrap">
-                {product.colors.map((color, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleColorChange(color)}
-                    className={`flex items-center gap-2 px-4 py-2 border transition-all text-sm ${
-                      selectedColor === color
-                        ? 'border-foreground bg-foreground/5'
-                        : 'border-border hover:border-foreground/50'
-                    }`}
-                  >
-                    <div
-                      className="w-5 h-5 rounded-full border-2 border-gray-300"
-                      style={{ backgroundColor: color }}
-                    />
-                    <span>{color}</span>
-                  </button>
-                ))}
+          {(() => {
+            // Get available colors from either product.colors or extract from variants
+            const availableColors = product.colors && product.colors.length > 0
+              ? product.colors
+              : product.variants && product.variants.length > 0
+                ? [...new Set(product.variants.map(v => v.color).filter(c => c))]
+                : [];
+
+            return availableColors.length > 0 && (
+              <div className="mb-6">
+                <label className="block text-sm uppercase tracking-widest text-gray-600 mb-3 text-xs">
+                  COLOR
+                </label>
+                <div className="flex gap-2 flex-wrap">
+                  {availableColors.map((color, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleColorChange(color)}
+                      className={`flex items-center gap-2 px-4 py-2 border transition-all text-sm ${
+                        selectedColor === color
+                          ? 'border-foreground bg-foreground/5'
+                          : 'border-border hover:border-foreground/50'
+                      }`}
+                    >
+                      <div
+                        className="w-5 h-5 rounded-full border-2 border-gray-300"
+                        style={{ backgroundColor: color }}
+                      />
+                      <span>{color}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Size Selection */}
-          {product.sizes && product.sizes.length > 0 && (
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm uppercase tracking-widest text-gray-600 text-xs">
-                  SIZE
-                </label>
-                <Link href="#size-guide" className="text-xs underline text-gray-600 hover:text-foreground">
-                  Size Guide
-                </Link>
+          {(() => {
+            // Get available sizes from either product.sizes or extract from variants
+            const availableSizes = product.sizes && product.sizes.length > 0
+              ? product.sizes
+              : product.variants && product.variants.length > 0
+                ? [...new Set(product.variants.map(v => v.size))]
+                : [];
+
+            return availableSizes.length > 0 && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm uppercase tracking-widest text-gray-600 text-xs">
+                    SIZE
+                  </label>
+                  <Link href="#size-guide" className="text-xs underline text-gray-600 hover:text-foreground">
+                    Size Guide
+                  </Link>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {availableSizes.map((size, index) => {
+                    // Check if this size is in stock (if using variants)
+                    const isInStock = !product.variants || product.variants.length === 0 ||
+                      product.variants.some(v => v.size === size && v.quantity > 0);
+
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => setSelectedSize(size)}
+                        disabled={!isInStock}
+                        className={`px-6 py-2 border transition-all text-sm ${
+                          selectedSize === size
+                            ? 'border-foreground bg-foreground/5'
+                            : 'border-border hover:border-foreground/50'
+                        } ${!isInStock ? 'opacity-50 cursor-not-allowed line-through' : ''}`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex gap-2 flex-wrap">
-                {product.sizes.map((size, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedSize(size)}
-                    className={`px-6 py-2 border transition-all text-sm ${
-                      selectedSize === size
-                        ? 'border-foreground bg-foreground/5'
-                        : 'border-border hover:border-foreground/50'
-                    }`}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Quantity Selector */}
           <div className="mb-6">
@@ -606,6 +645,46 @@ export default function ProductDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Size Guide */}
+          {product.size_guide && product.size_guide.length > 0 && (
+            <div className="border-t border-border pt-6 mt-8">
+              <h3 className="text-sm uppercase tracking-widest text-gray-600 mb-4">
+                Size Guide
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="border border-gray-300 px-4 py-2 text-left text-sm font-semibold text-gray-900">Size</th>
+                      {Object.keys(product.size_guide[0])
+                        .filter(key => key !== 'size')
+                        .map((key) => (
+                          <th key={key} className="border border-gray-300 px-4 py-2 text-left text-sm font-semibold text-gray-900">
+                            {key.charAt(0).toUpperCase() + key.slice(1)}
+                          </th>
+                        ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {product.size_guide.map((entry, idx) => (
+                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900">{entry.size}</td>
+                        {Object.keys(entry)
+                          .filter(key => key !== 'size')
+                          .map((key) => (
+                            <td key={key} className="border border-gray-300 px-4 py-2 text-sm text-gray-600">
+                              {entry[key] || '-'}
+                            </td>
+                          ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">All measurements are in inches</p>
+            </div>
+          )}
         </div>
       </div>
 

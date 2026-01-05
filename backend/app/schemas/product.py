@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict, Any
 
 class DiscountBase(BaseModel):
     enabled: bool
@@ -30,6 +30,8 @@ class ProductBase(BaseModel):
     description: str
     price: float
     category: str
+    collection: Optional[str] = None
+    size_guide: Optional[List[Dict[str, Any]]] = None  # e.g., [{"size": "S", "chest": "24", "waist": "38"}]
     stock: int
     images: List[ProductImageBase] = []  # Array of image objects with color info
     colors: Optional[List[str]] = []
@@ -45,6 +47,8 @@ class ProductUpdate(BaseModel):
     description: Optional[str] = None
     price: Optional[float] = None
     category: Optional[str] = None
+    collection: Optional[str] = None
+    size_guide: Optional[List[Dict[str, Any]]] = None
     stock: Optional[int] = None
     images: Optional[List[ProductImageBase]] = None
     colors: Optional[List[str]] = None

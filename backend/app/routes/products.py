@@ -171,6 +171,8 @@ async def get_products(
             "description": product.description,
             "price": product.price,
             "category": product.category,
+            "collection": product.collection,
+            "size_guide": product.size_guide,
             "stock": total_stock,
             "images": images,
             "colors": product.colors or [],
@@ -256,6 +258,8 @@ async def get_product(
         "description": product.description,
         "price": product.price,
         "category": product.category,
+        "collection": product.collection,
+        "size_guide": product.size_guide,
         "stock": total_stock,
         "images": images,
         "colors": product.colors or [],
@@ -284,6 +288,8 @@ async def create_product(
     description: str = Form(...),
     price: float = Form(...),
     category: str = Form(...),
+    collection: Optional[str] = Form(None),
+    size_guide: Optional[str] = Form(None),
     stock: int = Form(...),
     images: List[UploadFile] = File([]),
     colors: Optional[str] = Form(None),
@@ -300,6 +306,7 @@ async def create_product(
     colors_list = json.loads(colors) if colors else []
     sizes_list = json.loads(sizes) if sizes else []
     variants_list = json.loads(variants) if variants else []
+    size_guide_list = json.loads(size_guide) if size_guide else None
     discount_data = json.loads(discount) if discount else None
     voucher_data = json.loads(voucher) if voucher else None
     image_colors_list = json.loads(image_colors) if image_colors else []
@@ -316,6 +323,8 @@ async def create_product(
         description=description,
         price=price,
         category=category,
+        collection=collection,
+        size_guide=size_guide_list,
         stock=stock,
         colors=colors_list,
         sizes=sizes_list,
@@ -399,6 +408,8 @@ async def create_product(
         "description": new_product.description,
         "price": new_product.price,
         "category": new_product.category,
+        "collection": new_product.collection,
+        "size_guide": new_product.size_guide,
         "stock": total_stock,
         "images": images_list,
         "colors": new_product.colors or [],
@@ -426,6 +437,8 @@ async def update_product(
     description: Optional[str] = Form(None),
     price: Optional[float] = Form(None),
     category: Optional[str] = Form(None),
+    collection: Optional[str] = Form(None),
+    size_guide: Optional[str] = Form(None),
     stock: Optional[int] = Form(None),
     images: List[UploadFile] = File([]),
     colors: Optional[str] = Form(None),
@@ -455,6 +468,14 @@ async def update_product(
         product.price = price
     if category is not None:
         product.category = category
+    if collection is not None:
+        product.collection = collection
+    if size_guide is not None:
+        try:
+            product.size_guide = json.loads(size_guide) if size_guide else None
+        except json.JSONDecodeError:
+            print(f"Failed to parse size_guide: {size_guide}")
+            product.size_guide = None
     if stock is not None:
         product.stock = stock
 
@@ -583,6 +604,8 @@ async def update_product(
         "description": product.description,
         "price": product.price,
         "category": product.category,
+        "collection": product.collection,
+        "size_guide": product.size_guide,
         "stock": total_stock,
         "images": images_list,
         "colors": product.colors or [],
@@ -673,6 +696,8 @@ async def get_bestsellers(
             "description": product.description,
             "price": product.price,
             "category": product.category,
+            "collection": product.collection,
+            "size_guide": product.size_guide,
             "stock": total_stock,
             "images": images,
             "colors": product.colors or [],
@@ -719,6 +744,8 @@ async def get_new_arrivals(
             "description": product.description,
             "price": product.price,
             "category": product.category,
+            "collection": product.collection,
+            "size_guide": product.size_guide,
             "stock": total_stock,
             "images": images,
             "colors": product.colors or [],

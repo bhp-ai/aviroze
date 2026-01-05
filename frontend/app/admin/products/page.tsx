@@ -83,6 +83,8 @@ export default function ProductsPage() {
     description: '',
     price: 0,
     category: '',
+    collection: '',
+    size_guide: [],
     stock: 0,
     image: '',
     images: [],
@@ -116,6 +118,11 @@ export default function ProductsPage() {
   const [imageColors, setImageColors] = useState<string[]>([]); // Track color for each new media
   const [replaceAllImages, setReplaceAllImages] = useState<boolean>(false);
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
+
+  // Size guide states
+  const [sizeGuideInputs, setSizeGuideInputs] = useState<{[key: string]: string}>({size: ''});
+  const [sizeGuideMeasurementFields, setSizeGuideMeasurementFields] = useState<string[]>([]);
+  const [measurementFieldInput, setMeasurementFieldInput] = useState('');
 
   // Load products from API on mount
   useEffect(() => {
@@ -188,6 +195,15 @@ export default function ProductsPage() {
       setImagePreviews([]);
       setImageFileTypes([]);
       setImageColors([]);
+
+      // Extract measurement fields from existing size guide
+      if (product.size_guide && product.size_guide.length > 0) {
+        const fields = Object.keys(product.size_guide[0]).filter(key => key !== 'size');
+        setSizeGuideMeasurementFields(fields);
+      } else {
+        setSizeGuideMeasurementFields([]);
+      }
+      setMeasurementFieldInput('');
     } else {
       setEditingProduct(null);
       setFormData({
@@ -196,6 +212,8 @@ export default function ProductsPage() {
         description: '',
         price: 0,
         category: '',
+        collection: '',
+        size_guide: [],
         stock: 0,
         images: [],
         colors: [],
@@ -219,6 +237,9 @@ export default function ProductsPage() {
       setImagePreviews([]);
       setImageFileTypes([]);
       setImageColors([]);
+      setSizeGuideMeasurementFields([]);
+      setMeasurementFieldInput('');
+      setSizeGuideInputs({size: ''});
     }
     setColorInput('');
     setVariantSizeInput('');
@@ -234,6 +255,9 @@ export default function ProductsPage() {
     setImageFileTypes([]);
     setImageColors([]);
     setReplaceAllImages(false);
+    setSizeGuideMeasurementFields([]);
+    setMeasurementFieldInput('');
+    setSizeGuideInputs({size: ''});
   };
 
 
@@ -338,6 +362,8 @@ export default function ProductsPage() {
         description: formData.description,
         price: formData.price,
         category: formData.category,
+        collection: formData.collection,
+        size_guide: formData.size_guide,
         stock: calculatedStock,
         colors: formData.colors || [],
         sizes: formData.sizes || [],
@@ -911,6 +937,175 @@ export default function ProductsPage() {
                       ) : (
                         <p className="text-xs text-gray-500 mt-1">Enter any category name</p>
                       )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Collection
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.collection || ''}
+                        onChange={(e) => setFormData({ ...formData, collection: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                        placeholder="e.g., Summer 2024, New Arrivals"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Optional product line or collection name</p>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Size Guide
+                      </label>
+                      <div className="space-y-3">
+                        {/* Add measurement field */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Measurement name (e.g., Chest, Waist, Hip)"
+                            value={measurementFieldInput}
+                            onChange={(e) => setMeasurementFieldInput(e.target.value)}
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const field = measurementFieldInput.trim();
+                                if (field && !sizeGuideMeasurementFields.includes(field.toLowerCase())) {
+                                  setSizeGuideMeasurementFields([...sizeGuideMeasurementFields, field.toLowerCase()]);
+                                  setMeasurementFieldInput('');
+                                }
+                              }
+                            }}
+                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const field = measurementFieldInput.trim();
+                              if (field && !sizeGuideMeasurementFields.includes(field.toLowerCase())) {
+                                setSizeGuideMeasurementFields([...sizeGuideMeasurementFields, field.toLowerCase()]);
+                                setMeasurementFieldInput('');
+                              }
+                            }}
+                            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+                          >
+                            Add Field
+                          </button>
+                        </div>
+
+                        {/* Show added measurement fields */}
+                        {sizeGuideMeasurementFields.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            <span className="text-xs text-gray-600 font-medium w-full">Measurement fields:</span>
+                            {sizeGuideMeasurementFields.map((field, idx) => (
+                              <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                                {field}
+                                <button
+                                  type="button"
+                                  onClick={() => setSizeGuideMeasurementFields(sizeGuideMeasurementFields.filter((_, i) => i !== idx))}
+                                  className="text-blue-600 hover:text-blue-900"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Add size measurement */}
+                        {sizeGuideMeasurementFields.length > 0 && (
+                          <div className="border border-gray-300 rounded-lg p-3">
+                            <p className="text-xs font-medium text-gray-700 mb-2">Add Size Measurements</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
+                              <input
+                                type="text"
+                                placeholder="Size (e.g., S, M, L)"
+                                value={sizeGuideInputs.size || ''}
+                                onChange={(e) => setSizeGuideInputs({...sizeGuideInputs, size: e.target.value})}
+                                className="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-gray-900"
+                              />
+                              {sizeGuideMeasurementFields.map((field) => (
+                                <input
+                                  key={field}
+                                  type="text"
+                                  placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+                                  value={sizeGuideInputs[field] || ''}
+                                  onChange={(e) => setSizeGuideInputs({...sizeGuideInputs, [field]: e.target.value})}
+                                  className="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-gray-900"
+                                />
+                              ))}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (sizeGuideInputs.size && sizeGuideInputs.size.trim()) {
+                                  const newEntry: any = {size: sizeGuideInputs.size.trim()};
+                                  sizeGuideMeasurementFields.forEach(field => {
+                                    newEntry[field] = sizeGuideInputs[field] || '';
+                                  });
+                                  setFormData({
+                                    ...formData,
+                                    size_guide: [...(formData.size_guide || []), newEntry]
+                                  });
+                                  setSizeGuideInputs({size: ''});
+                                }
+                              }}
+                              className="w-full px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800"
+                            >
+                              Add Size
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Display current size guide */}
+                        {formData.size_guide && formData.size_guide.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-xs font-medium text-gray-700 mb-2">Current Size Guide:</p>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full border border-gray-300 text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="border border-gray-300 px-3 py-2 text-left font-medium">Size</th>
+                                    {sizeGuideMeasurementFields.map((field) => (
+                                      <th key={field} className="border border-gray-300 px-3 py-2 text-left font-medium">
+                                        {field.charAt(0).toUpperCase() + field.slice(1)}
+                                      </th>
+                                    ))}
+                                    <th className="border border-gray-300 px-3 py-2 text-left font-medium">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {formData.size_guide.map((entry, idx) => (
+                                    <tr key={idx}>
+                                      <td className="border border-gray-300 px-3 py-2">{entry.size}</td>
+                                      {sizeGuideMeasurementFields.map((field) => (
+                                        <td key={field} className="border border-gray-300 px-3 py-2">{entry[field] || '-'}</td>
+                                      ))}
+                                      <td className="border border-gray-300 px-3 py-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setFormData({
+                                              ...formData,
+                                              size_guide: formData.size_guide?.filter((_, i) => i !== idx)
+                                            });
+                                          }}
+                                          className="text-red-600 hover:text-red-900"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        <p className="text-xs text-gray-500">
+                          Add measurement fields (e.g., Chest, Waist, Hip), then enter measurements for each size.
+                        </p>
+                      </div>
                     </div>
 
                     <div className="md:col-span-2">

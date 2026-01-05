@@ -49,7 +49,7 @@ export default function Home() {
         </div>
 
         {/* Text Overlay */}
-        <div className="relative h-full bg-gradient-to-r from-white/90 via-white/60 to-transparent">
+        <div className="relative h-full bg-gradient-to-r from-white/90 via-white/60 to-transparent flex">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center">
             <div className="max-w-xl text-left py-12">
               <p className="text-xs tracking-[0.2em] mb-6 uppercase text-gray-800">

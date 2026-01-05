@@ -22,6 +22,11 @@ export interface ProductVariant {
   quantity: number;
 }
 
+export interface SizeGuideMeasurement {
+  size: string;
+  [key: string]: string;  // Dynamic measurement fields like chest, waist, etc.
+}
+
 export interface ProductImage {
   url: string;
   color?: string;
@@ -35,6 +40,8 @@ export interface Product {
   description: string;
   price: number;
   category: string;
+  collection?: string;
+  size_guide?: SizeGuideMeasurement[];
   stock: number;
   images: ProductImage[];  // Array of image objects with color info
   colors?: string[];
@@ -50,6 +57,8 @@ export interface ProductCreate {
   description: string;
   price: number;
   category: string;
+  collection?: string;
+  size_guide?: SizeGuideMeasurement[];
   stock: number;
   image?: string;
   colors?: string[];
@@ -100,6 +109,12 @@ export const productsService = {
     formData.append('description', data.description);
     formData.append('price', data.price.toString());
     formData.append('category', data.category);
+    if (data.collection) {
+      formData.append('collection', data.collection);
+    }
+    if (data.size_guide && data.size_guide.length > 0) {
+      formData.append('size_guide', JSON.stringify(data.size_guide));
+    }
     formData.append('stock', data.stock.toString());
 
     if (imageFiles && imageFiles.length > 0) {
@@ -147,6 +162,8 @@ export const productsService = {
     if (data.description !== undefined) formData.append('description', data.description);
     if (data.price !== undefined) formData.append('price', data.price.toString());
     if (data.category !== undefined) formData.append('category', data.category);
+    if (data.collection !== undefined) formData.append('collection', data.collection);
+    if (data.size_guide !== undefined) formData.append('size_guide', JSON.stringify(data.size_guide));
     if (data.stock !== undefined) formData.append('stock', data.stock.toString());
 
     if (imageFiles && imageFiles.length > 0) {

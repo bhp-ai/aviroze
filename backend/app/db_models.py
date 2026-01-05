@@ -101,6 +101,8 @@ class Product(Base):
     description = Column(Text, nullable=False)
     price = Column(Float, nullable=False)
     category = Column(String(100), nullable=False, index=True)  # Changed from Enum to String for flexibility
+    collection = Column(String(100), nullable=True, index=True)  # Collection/Product line
+    size_guide = Column(JSON, nullable=True)  # Size guide with measurements (e.g., [{"size": "S", "chest": "24", "waist": "38"}])
     stock = Column(Integer, default=0, nullable=False)
     image = Column(LargeBinary, nullable=True)  # Kept for backward compatibility (primary image)
     image_mimetype = Column(String(50), nullable=True)  # Store MIME type (e.g., image/jpeg, image/png)
