@@ -92,6 +92,18 @@ class User(Base):
     # Relationships
     comments = relationship("ProductComment", back_populates="user", cascade="all, delete-orphan")
 
+# Collection Model
+class Collection(Base):
+    __tablename__ = "collections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, unique=True, index=True)
+    description = Column(Text, nullable=True)
+    image = Column(LargeBinary, nullable=True)  # Store image as binary
+    image_mimetype = Column(String(50), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
 # Product Model
 class Product(Base):
     __tablename__ = "products"

@@ -71,7 +71,7 @@ export interface ProductCreate {
 export interface ProductUpdate extends Partial<ProductCreate> {}
 
 export const productsService = {
-  async getAll(params?: { category?: string; search?: string }): Promise<Product[]> {
+  async getAll(params?: { category?: string; collection?: string; search?: string }): Promise<Product[]> {
     const response = await apiClient.get<Product[]>('/api/products/', { params });
     return response.data;
   },
@@ -221,6 +221,11 @@ export const productsService = {
 
   async getCategories(): Promise<string[]> {
     const response = await apiClient.get<string[]>('/api/products/categories/list');
+    return response.data;
+  },
+
+  async getCollections(): Promise<string[]> {
+    const response = await apiClient.get<string[]>('/api/products/collections/list');
     return response.data;
   },
 };

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import auth_router, products_router, users_router, comments_router, analytics_router, payments_router, orders_router, banners_router, addresses_router, wishlists_router
 from app.routes.logs import router as logs_router
+from app.routes.collections import router as collections_router
 from app.database import engine, Base, SessionLocal
 from app.db_models import User, UserRole, UserStatus
 from app.auth import get_password_hash
@@ -82,6 +83,7 @@ app.add_middleware(LoggingMiddleware)
 # Include routers
 app.include_router(auth_router)
 app.include_router(products_router)
+app.include_router(collections_router)
 app.include_router(users_router)
 app.include_router(comments_router)
 app.include_router(analytics_router)

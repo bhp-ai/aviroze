@@ -12,6 +12,7 @@ export default function ProductsPage() {
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedCollection, setSelectedCollection] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -22,11 +23,16 @@ export default function ProductsPage() {
 
   const ITEMS_PER_PAGE = 10;
 
-  // Read category from URL on mount
+  // Read category and collection from URL on mount
   useEffect(() => {
     const categoryFromUrl = searchParams.get('category');
+    const collectionFromUrl = searchParams.get('collection');
+
     if (categoryFromUrl) {
       setSelectedCategories([categoryFromUrl]);
+    }
+    if (collectionFromUrl) {
+      setSelectedCollection(collectionFromUrl);
     }
   }, [searchParams]);
 
@@ -42,7 +48,7 @@ export default function ProductsPage() {
     fetchCategories();
   }, []);
 
-  // Fetch products when category or search changes
+  // Fetch products when category, collection, or search changes
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -50,9 +56,10 @@ export default function ProductsPage() {
         setError('');
         setPage(1);
 
-        // Fetch all products first
+        // Fetch products with filters
         const params: any = {};
         if (searchQuery) params.search = searchQuery;
+        if (selectedCollection) params.collection = selectedCollection;
         const data = await productsService.getAll(params);
 
         // Filter by multiple categories on client side
@@ -88,7 +95,7 @@ export default function ProductsPage() {
     };
 
     fetchProducts();
-  }, [selectedCategories, searchQuery]);
+  }, [selectedCategories, selectedCollection, searchQuery]);
 
   // Load more products when page changes
   useEffect(() => {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Trash2, X, Tag, Ticket, Package, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { productsService, Product as APIProduct } from '@/lib/services/products';
+import { collectionsService } from '@/lib/services/collections';
 import { formatIDR } from '@/lib/utils/currency';
 import { exportToCSV, formatDateForCSV, formatCurrencyForCSV } from '@/lib/utils/csv-export';
 
@@ -123,11 +124,28 @@ export default function ProductsPage() {
   const [sizeGuideInputs, setSizeGuideInputs] = useState<{[key: string]: string}>({size: ''});
   const [sizeGuideMeasurementFields, setSizeGuideMeasurementFields] = useState<string[]>([]);
   const [measurementFieldInput, setMeasurementFieldInput] = useState('');
+  const [editingSizeGuideIndex, setEditingSizeGuideIndex] = useState<number | null>(null);
+  const [sizeGuideError, setSizeGuideError] = useState('');
 
-  // Load products from API on mount
+  // Collections state
+  const [availableCollections, setAvailableCollections] = useState<string[]>([]);
+  const [showCustomCollection, setShowCustomCollection] = useState(false);
+  const [customCollectionInput, setCustomCollectionInput] = useState('');
+
+  // Load products and collections from API on mount
   useEffect(() => {
     fetchProducts();
+    fetchCollections();
   }, []);
+
+  const fetchCollections = async () => {
+    try {
+      const collections = await collectionsService.getAll();
+      setAvailableCollections(collections.map(c => c.name));
+    } catch (err) {
+      console.log('No collections available yet');
+    }
+  };
 
   const fetchProducts = async (search?: string) => {
     try {
@@ -176,8 +194,27 @@ export default function ProductsPage() {
   const handleOpenModal = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
+
+      // Consolidate duplicate variants (same color+size) when loading
+      let consolidatedVariants = product.variants || [];
+      if (consolidatedVariants.length > 0) {
+        const variantMap: {[key: string]: any} = {};
+        consolidatedVariants.forEach(v => {
+          const key = `${v.color || 'no-color'}-${v.size}`;
+          if (variantMap[key]) {
+            // Duplicate found - sum the quantities
+            variantMap[key].quantity += v.quantity;
+          } else {
+            variantMap[key] = { ...v };
+          }
+        });
+        consolidatedVariants = Object.values(variantMap);
+      }
+
       setFormData({
         ...product,
+        collection: product.collection || '',  // Convert null to empty string
+        variants: consolidatedVariants,
         discount: product.discount || {
           enabled: false,
           type: 'percentage',
@@ -191,6 +228,16 @@ export default function ProductsPage() {
           expiryDate: '',
         },
       });
+
+      // Check if product's collection is not in availableCollections
+      if (product.collection && !availableCollections.includes(product.collection)) {
+        setShowCustomCollection(true);
+        setCustomCollectionInput(product.collection);
+      } else {
+        setShowCustomCollection(false);
+        setCustomCollectionInput('');
+      }
+
       setImageFiles([]);
       setImagePreviews([]);
       setImageFileTypes([]);
@@ -240,10 +287,14 @@ export default function ProductsPage() {
       setSizeGuideMeasurementFields([]);
       setMeasurementFieldInput('');
       setSizeGuideInputs({size: ''});
+      setShowCustomCollection(false);
+      setCustomCollectionInput('');
     }
     setColorInput('');
     setVariantSizeInput('');
     setVariantQuantityInput(0);
+    setEditingSizeGuideIndex(null);
+    setSizeGuideError('');
     setIsModalOpen(true);
   };
 
@@ -258,6 +309,10 @@ export default function ProductsPage() {
     setSizeGuideMeasurementFields([]);
     setMeasurementFieldInput('');
     setSizeGuideInputs({size: ''});
+    setEditingSizeGuideIndex(null);
+    setSizeGuideError('');
+    setShowCustomCollection(false);
+    setCustomCollectionInput('');
   };
 
 
@@ -623,6 +678,9 @@ export default function ProductsPage() {
                   Category
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Collection
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Colors
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -669,6 +727,15 @@ export default function ProductsPage() {
                     <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                       {product.category}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {product.collection ? (
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                        {product.collection}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-1">
@@ -942,14 +1009,72 @@ export default function ProductsPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Collection
                       </label>
-                      <input
-                        type="text"
-                        value={formData.collection || ''}
-                        onChange={(e) => setFormData({ ...formData, collection: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
-                        placeholder="e.g., Summer 2024, New Arrivals"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Optional product line or collection name</p>
+
+                      {/* Show dropdown if collections exist */}
+                      {availableCollections.length > 0 && !showCustomCollection ? (
+                        <div className="space-y-2">
+                          <select
+                            value={formData.collection || ''}
+                            onChange={(e) => {
+                              if (e.target.value === '__custom__') {
+                                setShowCustomCollection(true);
+                                setCustomCollectionInput('');
+                                setFormData({ ...formData, collection: '' });
+                              } else {
+                                setFormData({ ...formData, collection: e.target.value });
+                              }
+                            }}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                          >
+                            <option value="">Select a collection</option>
+                            {availableCollections.map((collection) => (
+                              <option key={collection} value={collection}>
+                                {collection}
+                              </option>
+                            ))}
+                            <option value="__custom__">+ Add New Collection</option>
+                          </select>
+                          <p className="text-xs text-gray-500">Select existing collection or add new</p>
+                        </div>
+                      ) : (
+                        /* Show text input for custom collection */
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={showCustomCollection ? customCollectionInput : (formData.collection || '')}
+                              onChange={(e) => {
+                                if (showCustomCollection) {
+                                  setCustomCollectionInput(e.target.value);
+                                  setFormData({ ...formData, collection: e.target.value });
+                                } else {
+                                  setFormData({ ...formData, collection: e.target.value });
+                                }
+                              }}
+                              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                              placeholder="e.g., Summer 2024, New Arrivals"
+                            />
+                            {showCustomCollection && availableCollections.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowCustomCollection(false);
+                                  setCustomCollectionInput('');
+                                  setFormData({ ...formData, collection: '' });
+                                }}
+                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {showCustomCollection
+                              ? 'Enter new collection name'
+                              : 'Optional product line or collection name'}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="md:col-span-2">
@@ -1013,7 +1138,15 @@ export default function ProductsPage() {
                         {/* Add size measurement */}
                         {sizeGuideMeasurementFields.length > 0 && (
                           <div className="border border-gray-300 rounded-lg p-3">
-                            <p className="text-xs font-medium text-gray-700 mb-2">Add Size Measurements</p>
+                            <p className="text-xs font-medium text-gray-700 mb-2">
+                              {editingSizeGuideIndex !== null ? 'Edit Size Measurements' : 'Add Size Measurements'}
+                            </p>
+                            {/* Display size guide error */}
+                            {sizeGuideError && (
+                              <div className="mb-3 p-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded">
+                                {sizeGuideError}
+                              </div>
+                            )}
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
                               <input
                                 type="text"
@@ -1033,25 +1166,70 @@ export default function ProductsPage() {
                                 />
                               ))}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (sizeGuideInputs.size && sizeGuideInputs.size.trim()) {
-                                  const newEntry: any = {size: sizeGuideInputs.size.trim()};
-                                  sizeGuideMeasurementFields.forEach(field => {
-                                    newEntry[field] = sizeGuideInputs[field] || '';
-                                  });
-                                  setFormData({
-                                    ...formData,
-                                    size_guide: [...(formData.size_guide || []), newEntry]
-                                  });
-                                  setSizeGuideInputs({size: ''});
-                                }
-                              }}
-                              className="w-full px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800"
-                            >
-                              Add Size
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (sizeGuideInputs.size && sizeGuideInputs.size.trim()) {
+                                    const sizeValue = sizeGuideInputs.size.trim();
+
+                                    // Check if size already exists (excluding the one being edited)
+                                    const duplicateExists = formData.size_guide?.some(
+                                      (entry, idx) => entry.size.toLowerCase() === sizeValue.toLowerCase() && idx !== editingSizeGuideIndex
+                                    );
+
+                                    if (duplicateExists) {
+                                      setSizeGuideError(`Size "${sizeValue}" already exists in the size guide. Please use a different size or remove the existing one first.`);
+                                      // Auto-clear error after 5 seconds
+                                      setTimeout(() => setSizeGuideError(''), 5000);
+                                      return;
+                                    }
+
+                                    const newEntry: any = {size: sizeValue};
+                                    sizeGuideMeasurementFields.forEach(field => {
+                                      newEntry[field] = sizeGuideInputs[field] || '';
+                                    });
+
+                                    if (editingSizeGuideIndex !== null) {
+                                      // Update existing entry
+                                      const updatedSizeGuide = [...(formData.size_guide || [])];
+                                      updatedSizeGuide[editingSizeGuideIndex] = newEntry;
+                                      setFormData({
+                                        ...formData,
+                                        size_guide: updatedSizeGuide
+                                      });
+                                      setEditingSizeGuideIndex(null);
+                                    } else {
+                                      // Add new entry
+                                      setFormData({
+                                        ...formData,
+                                        size_guide: [...(formData.size_guide || []), newEntry]
+                                      });
+                                    }
+
+                                    setSizeGuideInputs({size: ''});
+                                    // Clear any existing errors
+                                    setSizeGuideError('');
+                                  }
+                                }}
+                                className="flex-1 px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800"
+                              >
+                                {editingSizeGuideIndex !== null ? 'Update Size' : 'Add Size'}
+                              </button>
+                              {editingSizeGuideIndex !== null && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingSizeGuideIndex(null);
+                                    setSizeGuideInputs({size: ''});
+                                    setSizeGuideError('');
+                                  }}
+                                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            </div>
                           </div>
                         )}
 
@@ -1080,18 +1258,49 @@ export default function ProductsPage() {
                                         <td key={field} className="border border-gray-300 px-3 py-2">{entry[field] || '-'}</td>
                                       ))}
                                       <td className="border border-gray-300 px-3 py-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setFormData({
-                                              ...formData,
-                                              size_guide: formData.size_guide?.filter((_, i) => i !== idx)
-                                            });
-                                          }}
-                                          className="text-red-600 hover:text-red-900"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              // Populate inputs with the entry data for editing
+                                              const editInputs: {[key: string]: string} = {size: entry.size};
+                                              sizeGuideMeasurementFields.forEach(field => {
+                                                editInputs[field] = entry[field] || '';
+                                              });
+                                              setSizeGuideInputs(editInputs);
+                                              setEditingSizeGuideIndex(idx);
+                                              setSizeGuideError('');
+                                              // Scroll to the input area
+                                              document.getElementById('product-modal')?.scrollTo({
+                                                top: 0,
+                                                behavior: 'smooth'
+                                              });
+                                            }}
+                                            className="text-blue-600 hover:text-blue-900"
+                                            title="Edit size"
+                                          >
+                                            <Edit className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setFormData({
+                                                ...formData,
+                                                size_guide: formData.size_guide?.filter((_, i) => i !== idx)
+                                              });
+                                              // Clear edit state if deleting the entry being edited
+                                              if (editingSizeGuideIndex === idx) {
+                                                setEditingSizeGuideIndex(null);
+                                                setSizeGuideInputs({size: ''});
+                                                setSizeGuideError('');
+                                              }
+                                            }}
+                                            className="text-red-600 hover:text-red-900"
+                                            title="Delete size"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
                                       </td>
                                     </tr>
                                   ))}
@@ -1548,9 +1757,22 @@ export default function ProductsPage() {
                             // Extract unique sizes from variants
                             const uniqueSizes = Array.from(new Set(updatedVariants.map(v => v.size)));
 
+                            // Consolidate duplicate variants (same color+size) by summing quantities
+                            const consolidatedVariants: {[key: string]: any} = {};
+                            updatedVariants.forEach(v => {
+                              const key = `${v.color || 'no-color'}-${v.size}`;
+                              if (consolidatedVariants[key]) {
+                                // Duplicate found - sum the quantities
+                                consolidatedVariants[key].quantity += v.quantity;
+                              } else {
+                                consolidatedVariants[key] = { ...v };
+                              }
+                            });
+                            const finalVariants = Object.values(consolidatedVariants);
+
                             setFormData({
                               ...formData,
-                              variants: updatedVariants,
+                              variants: finalVariants,
                               sizes: uniqueSizes  // Auto-update sizes array
                             });
                             setVariantColorInput('');

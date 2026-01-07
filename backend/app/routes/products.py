@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import List, Optional
 from app.database import get_db
-from app.db_models import Product, ProductImage, ProductVariant, User, Order, OrderItem, OrderStatus, UserActivityType
+from app.db_models import Product, ProductImage, ProductVariant, User, Order, OrderItem, OrderStatus, UserActivityType, UserRole
 from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse
 from app.auth import get_current_user, get_current_admin_user
 from app.logging_helper import log_user_activity
@@ -65,25 +65,55 @@ def get_product_images(product: Product, color: Optional[str] = None, request: R
 
     return images
 
-def get_product_variants(product: Product, db: Session) -> List[dict]:
+def get_product_variants(product: Product, db: Session, use_actual_quantities: bool = False) -> List[dict]:
     """
-    Get all product variants with shared stock availability.
+    Get all product variants.
 
-    Uses shared stock formula:
+    Args:
+        product: The product to get variants for
+        db: Database session
+        use_actual_quantities: If True, return actual stored quantities (for admin editing)
+                              If False, return shared stock availability (for customer viewing)
+
+    Uses shared stock formula when use_actual_quantities=False:
     - Total Available Stock = Legacy Stock - Sum of all orders
     - Variant Is Available = Total Available Stock > 0
     """
-    # Calculate total available stock using shared formula
-    total_available = calculate_available_stock(product, db)
-
     variants = []
-    for variant in product.variants:
-        variants.append({
-            "color": variant.color,
-            "size": variant.size,
-            "quantity": total_available,  # All variants share the same pool
-            "available": total_available > 0
-        })
+
+    if use_actual_quantities:
+        # For admin editing - return actual stored quantities
+        # Consolidate duplicates (same color+size) by summing quantities
+        print(f"  get_product_variants: Admin mode - returning actual quantities")
+        consolidated = {}
+        for variant in product.variants:
+            print(f"  Raw variant from DB: color={variant.color}, size={variant.size}, quantity={variant.quantity}")
+            key = f"{variant.color or 'no-color'}_{variant.size}"
+            if key in consolidated:
+                consolidated[key]['quantity'] += variant.quantity
+                print(f"    Duplicate found! New total for {key}: {consolidated[key]['quantity']}")
+            else:
+                consolidated[key] = {
+                    "color": variant.color,
+                    "size": variant.size,
+                    "quantity": variant.quantity,
+                    "available": True  # Admin always sees items as available for editing
+                }
+        variants = list(consolidated.values())
+        print(f"  Final consolidated variants: {variants}")
+    else:
+        # For customer viewing - use shared stock formula
+        # Calculate total available stock using shared formula
+        total_available = calculate_available_stock(product, db)
+
+        for variant in product.variants:
+            variants.append({
+                "color": variant.color,
+                "size": variant.size,
+                "quantity": total_available,  # All variants share the same pool
+                "available": total_available > 0
+            })
+
     return variants
 
 def calculate_total_stock(product: Product, db: Session = None) -> int:
@@ -176,16 +206,47 @@ async def get_media_file(
 async def get_products(
     request: Request,
     category: Optional[str] = Query(None, description="Filter by category"),
+    collection: Optional[str] = Query(None, description="Filter by collection"),
     search: Optional[str] = Query(None, description="Search in name or description"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, le=100),
     db: Session = Depends(get_db)
 ):
     """Get all products with optional filtering"""
+    # Check if user is admin
+    is_admin = False
+    try:
+        auth_header = request.headers.get("authorization", "")
+        print(f"GET /api/products/ - Auth header: {auth_header[:50] if auth_header else 'None'}...")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+            from app.auth import jwt, SECRET_KEY, ALGORITHM
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                email = payload.get("sub")
+                print(f"  Token decoded - email: {email}")
+                if email:
+                    user = db.query(User).filter(User.email == email).first()
+                    if user:
+                        print(f"  User found - role: {user.role}")
+                        if user.role == UserRole.ADMIN:
+                            is_admin = True
+                            print(f"  IS ADMIN!")
+            except Exception as e:
+                print(f"  Token decode error: {e}")
+                pass
+    except Exception as e:
+        print(f"  Auth check error: {e}")
+        pass
+    print(f"Final is_admin value: {is_admin}")
+
     query = db.query(Product)
 
     if category:
         query = query.filter(Product.category == category)
+
+    if collection:
+        query = query.filter(Product.collection == collection)
 
     if search:
         query = query.filter(
@@ -200,7 +261,10 @@ async def get_products(
     for product in products:
         # Get all product images
         images = get_product_images(product, request=request)
-        variants = get_product_variants(product, db)
+        # For admin users, return actual quantities; for customers, return shared stock
+        print(f"GET products list - Product {product.id}: is_admin={is_admin}")
+        variants = get_product_variants(product, db, use_actual_quantities=is_admin)
+        print(f"  Variants returned: {variants}")
         available_stock = calculate_total_stock(product, db)
 
         product_dict = {
@@ -252,6 +316,7 @@ async def get_product(
 
     # Log product view activity (works for authenticated and anonymous users)
     user_id = None
+    is_admin = False
     try:
         # Try to extract user from authorization header
         auth_header = request.headers.get("authorization", "")
@@ -265,6 +330,7 @@ async def get_product(
                     user = db.query(User).filter(User.email == email).first()
                     if user:
                         user_id = user.id
+                        is_admin = (user.role == UserRole.ADMIN)
             except:
                 pass
     except:
@@ -288,7 +354,10 @@ async def get_product(
 
     # Get all product images (with color filter if specified)
     images = get_product_images(product, color=color, request=request)
-    variants = get_product_variants(product, db)
+    # For admin users, return actual quantities; for customers, return shared stock
+    print(f"GET product {product.id}: is_admin={is_admin}, use_actual_quantities={is_admin}")
+    variants = get_product_variants(product, db, use_actual_quantities=is_admin)
+    print(f"Returning variants: {variants}")
     available_stock = calculate_total_stock(product, db)
 
     product_dict = {
@@ -419,6 +488,8 @@ async def create_product(
             db.add(product_image)
 
     # Store product variants (color + size based inventory)
+    # Consolidate duplicate variants (same color+size) by summing quantities
+    consolidated_variants = {}
     for variant_data in variants_list:
         if variant_data.get('size') and variant_data.get('quantity') is not None:
             # Convert empty string to None for color
@@ -426,20 +497,36 @@ async def create_product(
             if color_value is not None and not color_value.strip():
                 color_value = None
 
-            variant = ProductVariant(
-                product_id=new_product.id,
-                color=color_value,  # Optional color
-                size=variant_data['size'],
-                quantity=variant_data['quantity']
-            )
-            db.add(variant)
+            # Create unique key for this variant
+            key = f"{color_value or 'no-color'}_{variant_data['size']}"
+
+            if key in consolidated_variants:
+                # Duplicate found - sum the quantities
+                consolidated_variants[key]['quantity'] += variant_data['quantity']
+                print(f"Consolidated duplicate variant {key}: new qty={consolidated_variants[key]['quantity']}")
+            else:
+                consolidated_variants[key] = {
+                    'color': color_value,
+                    'size': variant_data['size'],
+                    'quantity': variant_data['quantity']
+                }
+
+    # Add consolidated variants
+    for variant_data in consolidated_variants.values():
+        variant = ProductVariant(
+            product_id=new_product.id,
+            color=variant_data['color'],
+            size=variant_data['size'],
+            quantity=variant_data['quantity']
+        )
+        db.add(variant)
 
     db.commit()
     db.refresh(new_product)
 
     # Get all product images
     images_list = get_product_images(new_product, request=None)
-    variants_list_response = get_product_variants(new_product, db)
+    variants_list_response = get_product_variants(new_product, db, use_actual_quantities=True)
     available_stock = calculate_total_stock(new_product, db)
 
     return {
@@ -559,9 +646,9 @@ async def update_product(
         try:
             variants_list = json.loads(variants) if variants else []
             print(f"Updating variants: {variants_list}")  # Debug log
-            # Delete existing variants
-            db.query(ProductVariant).filter(ProductVariant.product_id == product_id).delete()
-            # Add new variants
+
+            # Consolidate duplicate variants (same color+size) by summing quantities
+            consolidated_variants = {}
             for variant_data in variants_list:
                 if variant_data.get('size') and variant_data.get('quantity') is not None:
                     # Convert empty string to None for color
@@ -569,14 +656,33 @@ async def update_product(
                     if color_value is not None and not color_value.strip():
                         color_value = None
 
-                    print(f"Creating variant: color={color_value}, size={variant_data['size']}, qty={variant_data['quantity']}")  # Debug log
-                    variant = ProductVariant(
-                        product_id=product_id,
-                        color=color_value,  # Optional color
-                        size=variant_data['size'],
-                        quantity=variant_data['quantity']
-                    )
-                    db.add(variant)
+                    # Create unique key for this variant
+                    key = f"{color_value or 'no-color'}_{variant_data['size']}"
+
+                    if key in consolidated_variants:
+                        # Duplicate found - sum the quantities
+                        consolidated_variants[key]['quantity'] += variant_data['quantity']
+                        print(f"Consolidated duplicate variant {key}: new qty={consolidated_variants[key]['quantity']}")
+                    else:
+                        consolidated_variants[key] = {
+                            'color': color_value,
+                            'size': variant_data['size'],
+                            'quantity': variant_data['quantity']
+                        }
+
+            # Delete existing variants
+            db.query(ProductVariant).filter(ProductVariant.product_id == product_id).delete()
+
+            # Add consolidated variants
+            for variant_data in consolidated_variants.values():
+                print(f"Creating variant: color={variant_data['color']}, size={variant_data['size']}, qty={variant_data['quantity']}")  # Debug log
+                variant = ProductVariant(
+                    product_id=product_id,
+                    color=variant_data['color'],
+                    size=variant_data['size'],
+                    quantity=variant_data['quantity']
+                )
+                db.add(variant)
         except json.JSONDecodeError as e:
             print(f"Failed to parse variants: {variants}, Error: {e}")
         except Exception as e:
@@ -636,7 +742,7 @@ async def update_product(
 
     # Get all product images
     images_list = get_product_images(product, request=None)
-    variants_list_response = get_product_variants(product, db)
+    variants_list_response = get_product_variants(product, db, use_actual_quantities=True)
     available_stock = calculate_total_stock(product, db)
 
     return {
@@ -692,6 +798,16 @@ async def get_categories(db: Session = Depends(get_db)):
     # Get distinct categories from the products table
     categories = db.query(Product.category).distinct().all()
     return [cat[0] for cat in categories if cat[0]]  # Return list of category strings
+
+@router.get("/collections/list", response_model=List[str])
+async def get_collections(db: Session = Depends(get_db)):
+    """Get list of unique product collections from database"""
+    # Get distinct collections from the products table
+    collections = db.query(Product.collection).distinct().filter(
+        Product.collection.isnot(None),
+        Product.collection != ''  # Filter out empty strings
+    ).all()
+    return [col[0] for col in collections if col[0] and col[0].strip()]  # Return list of non-empty collection strings
 
 @router.get("/bestsellers/", response_model=List[ProductResponse])
 async def get_bestsellers(

@@ -1,62 +1,110 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Sparkles, Heart, Award } from 'lucide-react';
+import { Sparkles, Heart, Award, Package } from 'lucide-react';
+import { productsService, Product } from '@/lib/services/products';
+import { collectionsService, Collection } from '@/lib/services/collections';
+
+interface CollectionData {
+  id: number;
+  title: string;
+  subtitle: string;
+  description: string;
+  image: string;
+  items: number;
+}
 
 export default function CollectionsPage() {
+  const router = useRouter();
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
+  const [collections, setCollections] = useState<CollectionData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const collections = [
-    {
-      id: 'spring-2025',
-      title: 'Spring 2025',
-      subtitle: 'Fresh Beginnings',
-      description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.',
-      image: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800&h=600&fit=crop',
-      items: 24,
-    },
-    {
-      id: 'winter-2024',
-      title: 'Winter 2024',
-      subtitle: 'Elegant Warmth',
-      description: 'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim.',
-      image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&h=600&fit=crop',
-      items: 32,
-    },
-    {
-      id: 'professional',
-      title: 'Professional',
-      subtitle: 'Power Dressing',
-      description: 'Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae.',
-      image: 'https://images.unsplash.com/photo-1487222477894-8943e31ef7b2?w=800&h=600&fit=crop',
-      items: 18,
-    },
-    {
-      id: 'casual-elegance',
-      title: 'Casual Elegance',
-      subtitle: 'Effortless Style',
-      description: 'Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.',
-      image: 'https://images.unsplash.com/photo-1467043153537-a4fba2cd39ef?w=800&h=600&fit=crop',
-      items: 27,
-    },
-    {
-      id: 'evening-wear',
-      title: 'Evening Wear',
-      subtitle: 'Glamorous Nights',
-      description: 'Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.',
-      image: 'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=800&h=600&fit=crop',
-      items: 15,
-    },
-    {
-      id: 'essentials',
-      title: 'Essentials',
-      subtitle: 'Timeless Basics',
-      description: 'Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse.',
-      image: 'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&h=600&fit=crop',
-      items: 21,
-    },
-  ];
+  useEffect(() => {
+    fetchCollections();
+  }, []);
+
+  const fetchCollections = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      // Get collections from Collection model ONLY
+      const collectionsFromDB = await collectionsService.getAll();
+
+      // Fetch product counts for each collection
+      const collectionsWithData: CollectionData[] = [];
+
+      for (const collection of collectionsFromDB) {
+        // Get products for this collection to count them
+        const products = await productsService.getAll({ collection: collection.name });
+
+        // Use collection's uploaded image, or fallback to first product image or placeholder
+        let collectionImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&h=600&fit=crop';
+
+        if (collection.image_url) {
+          // Use the uploaded collection image from Collection table
+          collectionImage = collection.image_url;
+        } else if (products.length > 0 && products[0].images && products[0].images.length > 0) {
+          // Fallback to first product's first image
+          const firstImage = products[0].images[0];
+          collectionImage = typeof firstImage === 'string' ? firstImage : firstImage.url;
+        }
+
+        collectionsWithData.push({
+          id: collection.id,
+          title: collection.name,
+          subtitle: `${products.length} ${products.length === 1 ? 'Item' : 'Items'}`,
+          description: collection.description || `Explore our ${collection.name} collection featuring ${products.length} carefully selected products.`,
+          image: collectionImage,
+          items: products.length,
+        });
+      }
+
+      setCollections(collectionsWithData);
+    } catch (err: any) {
+      setError('Failed to load collections');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCollectionClick = (collectionTitle: string) => {
+    // Navigate to products page with collection filter
+    router.push(`/products?collection=${encodeURIComponent(collectionTitle)}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mb-4"></div>
+          <p className="text-gray-600">Loading collections...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={fetchCollections}
+            className="bg-black text-white px-6 py-2 text-sm font-medium hover:bg-gray-800 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -96,12 +144,19 @@ export default function CollectionsPage() {
 
         {/* Collections Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-          {collections.map((collection) => (
-            <div
-              key={collection.id}
-              className="group cursor-pointer"
-              onClick={() => setSelectedCollection(collection.id)}
-            >
+          {collections.length === 0 ? (
+            <div className="col-span-full text-center py-12">
+              <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No collections available</p>
+              <p className="text-gray-400 text-sm mt-2">Check back soon for new collections!</p>
+            </div>
+          ) : (
+            collections.map((collection) => (
+              <div
+                key={collection.id}
+                className="group cursor-pointer"
+                onClick={() => handleCollectionClick(collection.title)}
+              >
               <div className="relative h-96 mb-4 overflow-hidden bg-gray-100">
                 <Image
                   src={collection.image}
@@ -126,7 +181,8 @@ export default function CollectionsPage() {
                 </p>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
 
         {/* Features Section */}
