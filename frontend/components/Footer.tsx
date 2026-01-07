@@ -19,7 +19,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           {/* Brand */}
           <div>
-            <h3 className="text-xl font-bold tracking-tight mb-4">AVIROZE</h3>
+            <h3 className="font-serif text-2xl tracking-wider">AVIROZE</h3>
             <p className="text-sm text-foreground/70 leading-relaxed mb-6">
               Timeless elegance for the modern professional. Crafted with care, designed to empower.
             </p>
@@ -99,7 +99,7 @@ export default function Footer() {
 
         {/* Bottom */}
         <div className="border-t border-foreground/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-foreground/60">
-          <p>&copy; 2025 Aviroze. All rights reserved.</p>
+          <p>&copy; 2026 Aviroze. All rights reserved.</p>
           <div className="flex gap-6">
             <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>

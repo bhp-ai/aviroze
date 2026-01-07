@@ -110,6 +110,8 @@ async def stripe_webhook(
             db.flush()  # Get the order ID
 
             # Create order items
+            # NOTE: We DO NOT update product.stock here because we use shared stock formula:
+            # Available Stock = Initial Stock (product.stock) - Sum of all OrderItem quantities
             for item in cart_items:
                 product = db.query(Product).filter(Product.id == item['product_id']).first()
                 if product:
@@ -120,9 +122,6 @@ async def stripe_webhook(
                         price=item['price']
                     )
                     db.add(order_item)
-
-                    # Update product stock
-                    product.stock = max(0, product.stock - item['quantity'])
 
             db.commit()
 

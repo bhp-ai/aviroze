@@ -65,22 +65,60 @@ def get_product_images(product: Product, color: Optional[str] = None, request: R
 
     return images
 
-def get_product_variants(product: Product) -> List[dict]:
-    """Get all product variants with color, size and quantity"""
+def get_product_variants(product: Product, db: Session) -> List[dict]:
+    """
+    Get all product variants with shared stock availability.
+
+    Uses shared stock formula:
+    - Total Available Stock = Legacy Stock - Sum of all orders
+    - Variant Is Available = Total Available Stock > 0
+    """
+    # Calculate total available stock using shared formula
+    total_available = calculate_available_stock(product, db)
+
     variants = []
     for variant in product.variants:
         variants.append({
             "color": variant.color,
             "size": variant.size,
-            "quantity": variant.quantity
+            "quantity": total_available,  # All variants share the same pool
+            "available": total_available > 0
         })
     return variants
 
-def calculate_total_stock(product: Product) -> int:
-    """Calculate total stock from variants"""
-    if product.variants:
-        return sum(variant.quantity for variant in product.variants)
-    return product.stock  # Fallback to legacy stock field
+def calculate_total_stock(product: Product, db: Session = None) -> int:
+    """
+    Calculate remaining stock using shared stock formula.
+
+    Formula: Total Stock = Legacy Stock - Sum(all order quantities)
+
+    This calculates stock remaining AFTER all orders have been placed.
+    All variants share from the same stock pool.
+    """
+    if db is None:
+        # Fallback if no db session provided
+        return product.stock
+
+    return calculate_available_stock(product, db)
+
+def calculate_available_stock(product: Product, db: Session) -> int:
+    """
+    Calculate available stock: Legacy Stock - Sum of all orders.
+
+    This is the core shared stock calculation that all variants use.
+    """
+    # Start with the legacy stock field (initial inventory)
+    initial_stock = product.stock or 0
+
+    # Calculate total quantity ordered across ALL orders
+    total_ordered = db.query(func.coalesce(func.sum(OrderItem.quantity), 0)).filter(
+        OrderItem.product_id == product.id
+    ).scalar() or 0
+
+    # Available = Initial - Ordered (minimum 0)
+    available = max(0, initial_stock - total_ordered)
+
+    return available
 
 @router.get("/{product_id}/image")
 async def get_product_image(
@@ -162,8 +200,8 @@ async def get_products(
     for product in products:
         # Get all product images
         images = get_product_images(product, request=request)
-        variants = get_product_variants(product)
-        total_stock = calculate_total_stock(product)
+        variants = get_product_variants(product, db)
+        available_stock = calculate_total_stock(product, db)
 
         product_dict = {
             "id": product.id,
@@ -173,7 +211,8 @@ async def get_products(
             "category": product.category,
             "collection": product.collection,
             "size_guide": product.size_guide,
-            "stock": total_stock,
+            "stock": product.stock,  # Legacy stock field (initial inventory)
+            "available_stock": available_stock,  # Calculated available stock
             "images": images,
             "colors": product.colors or [],
             "sizes": product.sizes or [],
@@ -249,8 +288,8 @@ async def get_product(
 
     # Get all product images (with color filter if specified)
     images = get_product_images(product, color=color, request=request)
-    variants = get_product_variants(product)
-    total_stock = calculate_total_stock(product)
+    variants = get_product_variants(product, db)
+    available_stock = calculate_total_stock(product, db)
 
     product_dict = {
         "id": product.id,
@@ -260,7 +299,8 @@ async def get_product(
         "category": product.category,
         "collection": product.collection,
         "size_guide": product.size_guide,
-        "stock": total_stock,
+        "stock": product.stock,  # Legacy stock field (initial inventory)
+        "available_stock": available_stock,  # Calculated available stock
         "images": images,
         "colors": product.colors or [],
         "sizes": product.sizes or [],
@@ -399,8 +439,8 @@ async def create_product(
 
     # Get all product images
     images_list = get_product_images(new_product, request=None)
-    variants_list_response = get_product_variants(new_product)
-    total_stock = calculate_total_stock(new_product)
+    variants_list_response = get_product_variants(new_product, db)
+    available_stock = calculate_total_stock(new_product, db)
 
     return {
         "id": new_product.id,
@@ -410,7 +450,8 @@ async def create_product(
         "category": new_product.category,
         "collection": new_product.collection,
         "size_guide": new_product.size_guide,
-        "stock": total_stock,
+        "stock": new_product.stock,  # Legacy stock field (initial inventory)
+        "available_stock": available_stock,  # Calculated available stock
         "images": images_list,
         "colors": new_product.colors or [],
         "sizes": new_product.sizes or [],
@@ -595,8 +636,8 @@ async def update_product(
 
     # Get all product images
     images_list = get_product_images(product, request=None)
-    variants_list_response = get_product_variants(product)
-    total_stock = calculate_total_stock(product)
+    variants_list_response = get_product_variants(product, db)
+    available_stock = calculate_total_stock(product, db)
 
     return {
         "id": product.id,
@@ -606,7 +647,8 @@ async def update_product(
         "category": product.category,
         "collection": product.collection,
         "size_guide": product.size_guide,
-        "stock": total_stock,
+        "stock": product.stock,  # Legacy stock field (initial inventory)
+        "available_stock": available_stock,  # Calculated available stock
         "images": images_list,
         "colors": product.colors or [],
         "sizes": product.sizes or [],
@@ -687,8 +729,8 @@ async def get_bestsellers(
     for product, total_sold in bestsellers:
         # Get all product images
         images = get_product_images(product, request=request)
-        variants = get_product_variants(product)
-        total_stock = calculate_total_stock(product)
+        variants = get_product_variants(product, db)
+        available_stock = calculate_total_stock(product, db)
 
         product_dict = {
             "id": product.id,
@@ -698,7 +740,8 @@ async def get_bestsellers(
             "category": product.category,
             "collection": product.collection,
             "size_guide": product.size_guide,
-            "stock": total_stock,
+            "stock": product.stock,  # Legacy stock field (initial inventory)
+            "available_stock": available_stock,  # Calculated available stock
             "images": images,
             "colors": product.colors or [],
             "sizes": product.sizes or [],
@@ -735,8 +778,8 @@ async def get_new_arrivals(
     for product in products:
         # Get all product images
         images = get_product_images(product, request=request)
-        variants = get_product_variants(product)
-        total_stock = calculate_total_stock(product)
+        variants = get_product_variants(product, db)
+        available_stock = calculate_total_stock(product, db)
 
         product_dict = {
             "id": product.id,
@@ -746,7 +789,8 @@ async def get_new_arrivals(
             "category": product.category,
             "collection": product.collection,
             "size_guide": product.size_guide,
-            "stock": total_stock,
+            "stock": product.stock,  # Legacy stock field (initial inventory)
+            "available_stock": available_stock,  # Calculated available stock
             "images": images,
             "colors": product.colors or [],
             "sizes": product.sizes or [],

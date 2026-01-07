@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 from pydantic import BaseModel
 from app.database import get_db
-from app.db_models import Product, User, Address
+from app.db_models import Product, User, Address, OrderItem
 from app.auth import get_current_user
 from app.services.email_service import email_service
 from app.services.stripe_service import stripe_service
@@ -57,11 +58,17 @@ async def create_checkout_session(
                     detail=f"Product with ID {item.product_id} not found"
                 )
 
-            # Check stock availability
-            if product.stock < item.quantity:
+            # Check stock availability using shared stock formula
+            # Calculate: Available = Initial Stock - Sum of all orders
+            total_ordered = db.query(func.coalesce(func.sum(OrderItem.quantity), 0)).filter(
+                OrderItem.product_id == product.id
+            ).scalar() or 0
+            available_stock = max(0, (product.stock or 0) - total_ordered)
+
+            if available_stock < item.quantity:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Insufficient stock for {product.name}"
+                    detail=f"Insufficient stock for {product.name}. Only {available_stock} units available."
                 )
 
             # Calculate the actual price with discounts
@@ -348,7 +355,9 @@ async def get_session_status(
                     db.flush()  # Get the order ID
                     print(f"[DEBUG] Order created with ID: {new_order.id}")
 
-                    # Create order items and update stock
+                    # Create order items
+                    # NOTE: We DO NOT update product.stock here because we use shared stock formula:
+                    # Available Stock = Initial Stock (product.stock) - Sum of all OrderItem quantities
                     for item in cart_items:
                         product = db.query(Product).filter(Product.id == item['product_id']).first()
                         if product:
@@ -360,9 +369,6 @@ async def get_session_status(
                                 price=item['price']
                             )
                             db.add(order_item)
-
-                            # Update product stock
-                            product.stock = max(0, product.stock - item['quantity'])
 
                     db.commit()
                     print(f"[DEBUG] Order committed successfully!")

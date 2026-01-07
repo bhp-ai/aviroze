@@ -40,7 +40,7 @@ export default function Home() {
         {/* Full Width Background Image */}
         <div className="absolute inset-0">
           <Image
-            src="https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1920&q=80"
+            src="/hero-main.jpg"
             alt="Aviroze Collection"
             fill
             className="object-cover object-center"
@@ -94,9 +94,9 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Workwear Essentials */}
-          <Link href="/collections/workwear" className="group relative h-96 overflow-hidden">
+          <Link href="/collections/workwear" className="group relative aspect-[4/5] overflow-hidden">
             <Image
-              src="https://images.unsplash.com/photo-1574015974293-817f0ebebb74?w=800"
+              src="/collection-workwear.jpg"
               alt="Workwear Essentials"
               fill
               className="object-cover group-hover:scale-105 transition-transform duration-300"
@@ -110,9 +110,9 @@ export default function Home() {
           </Link>
 
           {/* Power Suiting */}
-          <Link href="/collections/power-suiting" className="group relative h-96 overflow-hidden">
+          <Link href="/collections/power-suiting" className="group relative aspect-[4/5] overflow-hidden">
             <Image
-              src="https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=800"
+              src="/collection-suiting.jpg"
               alt="Power Suiting"
               fill
               className="object-cover group-hover:scale-105 transition-transform duration-300"

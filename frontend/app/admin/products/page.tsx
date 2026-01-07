@@ -352,10 +352,9 @@ export default function ProductsPage() {
 
 
     try {
-      // Calculate stock from variants if they exist
-      const calculatedStock = formData.variants && formData.variants.length > 0
-        ? formData.variants.reduce((sum, v) => sum + v.quantity, 0)
-        : formData.stock;
+      // IMPORTANT: Use formData.stock directly (initial inventory)
+      // Do NOT calculate from variants - we use shared stock formula
+      // All variants share from the same stock pool
 
       const productData = {
         name: formData.name,
@@ -364,7 +363,7 @@ export default function ProductsPage() {
         category: formData.category,
         collection: formData.collection,
         size_guide: formData.size_guide,
-        stock: calculatedStock,
+        stock: formData.stock,  // Use the user-entered stock value
         colors: formData.colors || [],
         sizes: formData.sizes || [],
         variants: formData.variants || [],
@@ -1302,21 +1301,16 @@ export default function ProductsPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Stock (Legacy - use Variants below)
+                        Stock (Initial Inventory)
                       </label>
                       <input
                         type="number"
-                        value={formData.variants && formData.variants.length > 0
-                          ? formData.variants.reduce((sum, v) => sum + v.quantity, 0)
-                          : formData.stock}
-                        disabled={formData.variants && formData.variants.length > 0}
+                        value={formData.stock}
                         onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                       />
                       <p className="text-xs text-gray-500 mt-1">
-                        {formData.variants && formData.variants.length > 0
-                          ? "Stock is automatically calculated from variants"
-                          : "Add variants below for size-based inventory"}
+                        Total units in your inventory. Variants share from this pool.
                       </p>
                     </div>
 
@@ -1470,6 +1464,23 @@ export default function ProductsPage() {
 
                             let updatedVariants = [...(formData.variants || [])];
 
+                            // Calculate total variant quantity (excluding the variant being edited if any)
+                            let currentTotal = updatedVariants.reduce((sum, v) => {
+                              // Exclude the variant being edited from the current total
+                              if (editingVariant && v.color === editingVariant.color && v.size === editingVariant.size) {
+                                return sum;
+                              }
+                              return sum + v.quantity;
+                            }, 0);
+
+                            // Check if adding this variant would exceed stock
+                            const newTotal = currentTotal + variantQuantityInput;
+                            if (newTotal > formData.stock) {
+                              setVariantError(`Total variant quantity (${newTotal}) cannot exceed stock (${formData.stock}). Currently allocated: ${currentTotal} units.`);
+                              setTimeout(() => setVariantError(''), 5000);
+                              return;
+                            }
+
                             if (editingVariant) {
                                 // Find the original variant being edited
                                 const originalVariant = updatedVariants.find(v =>
@@ -1534,9 +1545,13 @@ export default function ProductsPage() {
                                 }
                               }
 
+                            // Extract unique sizes from variants
+                            const uniqueSizes = Array.from(new Set(updatedVariants.map(v => v.size)));
+
                             setFormData({
                               ...formData,
-                              variants: updatedVariants
+                              variants: updatedVariants,
+                              sizes: uniqueSizes  // Auto-update sizes array
                             });
                             setVariantColorInput('');
                             setVariantSizeInput('');
@@ -1552,9 +1567,16 @@ export default function ProductsPage() {
                       )}
                       {formData.variants && formData.variants.length > 0 && (
                         <div>
-                          <p className="text-xs text-gray-600 mb-2">
-                            Total Stock: {formData.variants.reduce((sum, v) => sum + v.quantity, 0)} units
-                          </p>
+                          {(() => {
+                            const totalVariantQty = formData.variants.reduce((sum, v) => sum + v.quantity, 0);
+                            const exceeds = totalVariantQty > formData.stock;
+                            return (
+                              <p className={`text-xs mb-2 ${exceeds ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
+                                Total Variant Stock: {totalVariantQty} / {formData.stock} units
+                                {exceeds && ' ⚠️ EXCEEDS STOCK LIMIT!'}
+                              </p>
+                            );
+                          })()}
                           {/* Group variants by color */}
                           {(() => {
                             const variantsByColor: { [key: string]: any[] } = {};
@@ -1594,11 +1616,17 @@ export default function ProductsPage() {
                                       <button
                                         type="button"
                                         onClick={() => {
+                                          const updatedVariants = formData.variants?.filter(v =>
+                                            !(v.color === variant.color && v.size === variant.size)
+                                          ) || [];
+
+                                          // Extract unique sizes from remaining variants
+                                          const uniqueSizes = Array.from(new Set(updatedVariants.map(v => v.size)));
+
                                           setFormData({
                                             ...formData,
-                                            variants: formData.variants?.filter(v =>
-                                              !(v.color === variant.color && v.size === variant.size)
-                                            )
+                                            variants: updatedVariants,
+                                            sizes: uniqueSizes  // Auto-update sizes array
                                           });
                                         }}
                                         className="text-red-600 hover:text-red-800"

@@ -149,20 +149,33 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        {/* Wishlist Button - Top Right */}
+        {/* Action Buttons - Top Right */}
         {isApi && (
-          <button
-            onClick={handleWishlistToggle}
-            disabled={wishlistLoading}
-            className={`absolute top-3 right-3 p-2 rounded-full transition-all shadow-md z-10 ${
-              isInWishlist
-                ? 'bg-red-500 hover:bg-red-600'
-                : 'bg-white hover:bg-gray-100'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
-          >
-            <Heart className={`w-4 h-4 ${isInWishlist ? 'fill-white text-white' : 'text-gray-700'}`} />
-          </button>
+          <div className="absolute top-3 right-3 flex gap-2 z-10">
+            {/* Add to Cart Button */}
+            {inStock && (
+              <button
+                onClick={handleAddToCart}
+                className="p-2 rounded-full bg-white hover:bg-gray-100 transition-all shadow-md"
+                title="Add to cart"
+              >
+                <ShoppingCart className="w-4 h-4 text-gray-700" />
+              </button>
+            )}
+            {/* Wishlist Button */}
+            <button
+              onClick={handleWishlistToggle}
+              disabled={wishlistLoading}
+              className={`p-2 rounded-full transition-all shadow-md ${
+                isInWishlist
+                  ? 'bg-red-500 hover:bg-red-600'
+                  : 'bg-white hover:bg-gray-100'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+            >
+              <Heart className={`w-4 h-4 ${isInWishlist ? 'fill-white text-white' : 'text-gray-700'}`} />
+            </button>
+          </div>
         )}
 
         {!inStock && (
@@ -171,16 +184,24 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        {/* Add to Cart Button - Shows on hover */}
-        {inStock && isApi && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-            <button
-              onClick={handleAddToCart}
-              className="bg-white text-gray-900 px-4 py-2 text-xs font-medium flex items-center gap-2 shadow-lg hover:bg-gray-100"
-            >
-              <ShoppingCart className="w-4 h-4" />
-              Add to Cart
-            </button>
+        {/* Size Buttons - Shows on hover from bottom */}
+        {isApi && product.sizes && product.sizes.length > 0 && (
+          <div className="absolute bottom-0 left-0 right-0 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-white/95 backdrop-blur-sm p-3 z-10">
+            <div className="flex gap-1 justify-center">
+              {product.sizes.slice(0, 5).map((size, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-center px-2 py-1 text-xs border border-gray-300 bg-white hover:border-gray-900 hover:bg-gray-900 hover:text-white transition-colors cursor-pointer min-w-[32px]"
+                >
+                  {size}
+                </div>
+              ))}
+              {product.sizes.length > 5 && (
+                <div className="flex items-center justify-center px-2 py-1 text-xs border border-gray-300 bg-white text-gray-500 min-w-[32px]">
+                  +
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
