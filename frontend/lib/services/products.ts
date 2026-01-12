@@ -28,6 +28,7 @@ export interface SizeGuideMeasurement {
 }
 
 export interface ProductImage {
+  id?: number;  // Image ID for updating colors
   url: string;
   color?: string;
   display_order: number;
@@ -155,7 +156,7 @@ export const productsService = {
     return response.data;
   },
 
-  async update(id: number, data: ProductUpdate, imageFiles?: File[], replaceImages: boolean = false, imageColors?: string[]): Promise<Product> {
+  async update(id: number, data: ProductUpdate, imageFiles?: File[], replaceImages: boolean = false, imageColors?: string[], existingImageColors?: {[url: string]: string}): Promise<Product> {
     const formData = new FormData();
 
     if (data.name !== undefined) formData.append('name', data.name);
@@ -174,6 +175,11 @@ export const productsService = {
 
     if (imageColors && imageColors.length > 0) {
       formData.append('image_colors', JSON.stringify(imageColors));
+    }
+
+    // Send existing image colors mapping
+    if (existingImageColors && Object.keys(existingImageColors).length > 0) {
+      formData.append('existing_image_colors', JSON.stringify(existingImageColors));
     }
 
     formData.append('replace_images', replaceImages.toString());

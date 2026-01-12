@@ -19,6 +19,10 @@ export default function AdminOrdersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [ordersPerPage, setOrdersPerPage] = useState(5);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<'date' | 'total'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   useEffect(() => {
     const user = authService.getUser();
@@ -145,11 +149,41 @@ export default function AdminOrdersPage() {
     }
   };
 
+  // Filter and sort orders
+  const getFilteredAndSortedOrders = () => {
+    let filtered = [...orders];
+
+    // Filter by date range
+    if (dateFrom) {
+      filtered = filtered.filter(order => new Date(order.created_at) >= new Date(dateFrom));
+    }
+    if (dateTo) {
+      filtered = filtered.filter(order => new Date(order.created_at) <= new Date(dateTo));
+    }
+
+    // Sort orders
+    filtered.sort((a, b) => {
+      let comparison = 0;
+
+      if (sortBy === 'date') {
+        comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      } else if (sortBy === 'total') {
+        comparison = a.total_amount - b.total_amount;
+      }
+
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return filtered;
+  };
+
+  const filteredOrders = getFilteredAndSortedOrders();
+
   // Pagination calculations
   const indexOfLastOrder = currentPage * ordersPerPage;
   const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
-  const currentOrders = orders.slice(indexOfFirstOrder, indexOfLastOrder);
-  const totalPages = Math.ceil(orders.length / ordersPerPage);
+  const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+  const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
 
   const handlePageChange = (pageNumber: number) => {
     setCurrentPage(pageNumber);
@@ -188,35 +222,107 @@ export default function AdminOrdersPage() {
       </div>
 
       {/* Filter */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
-        <div className="flex items-center gap-4">
-          <Filter className="w-5 h-5 text-gray-400" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
-          >
-            <option value="">All Orders</option>
-            <option value="pending">Pending</option>
-            <option value="processing">Processing</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600 whitespace-nowrap">Per page:</span>
-            <select
-              value={ordersPerPage}
-              onChange={(e) => setOrdersPerPage(Number(e.target.value))}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
-            >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+        <div className="flex items-start gap-4">
+          <Filter className="w-5 h-5 text-gray-400 mt-2" />
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Status Filter */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+              >
+                <option value="">All Orders</option>
+                <option value="pending">Pending</option>
+                <option value="processing">Processing</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            {/* Date From */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Date From</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+
+            {/* Date To */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Date To</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+              />
+            </div>
+
+            {/* Sort By */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Sort By</label>
+              <div className="flex gap-2">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'date' | 'total')}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                >
+                  <option value="date">Date</option>
+                  <option value="total">Total</option>
+                </select>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                >
+                  <option value="desc">↓ Desc</option>
+                  <option value="asc">↑ Asc</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Per page</label>
+              <select
+                value={ordersPerPage}
+                onChange={(e) => setOrdersPerPage(Number(e.target.value))}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
           </div>
         </div>
+
+        {/* Clear Filters Button */}
+        {(dateFrom || dateTo || statusFilter || sortBy !== 'date' || sortOrder !== 'desc') && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <button
+              onClick={() => {
+                setDateFrom('');
+                setDateTo('');
+                setStatusFilter('');
+                setSortBy('date');
+                setSortOrder('desc');
+              }}
+              className="text-sm text-gray-600 hover:text-gray-900 font-medium"
+            >
+              Clear all filters
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Orders Stats */}
@@ -227,7 +333,7 @@ export default function AdminOrdersPage() {
             <div>
               <p className="text-sm text-yellow-600 font-medium">Pending</p>
               <p className="text-2xl font-bold text-yellow-900">
-                {orders.filter(o => o.status === 'pending').length}
+                {filteredOrders.filter(o => o.status === 'pending').length}
               </p>
             </div>
           </div>
@@ -238,7 +344,7 @@ export default function AdminOrdersPage() {
             <div>
               <p className="text-sm text-blue-600 font-medium">Processing</p>
               <p className="text-2xl font-bold text-blue-900">
-                {orders.filter(o => o.status === 'processing').length}
+                {filteredOrders.filter(o => o.status === 'processing').length}
               </p>
             </div>
           </div>
@@ -249,7 +355,7 @@ export default function AdminOrdersPage() {
             <div>
               <p className="text-sm text-green-600 font-medium">Completed</p>
               <p className="text-2xl font-bold text-green-900">
-                {orders.filter(o => o.status === 'completed').length}
+                {filteredOrders.filter(o => o.status === 'completed').length}
               </p>
             </div>
           </div>
@@ -260,14 +366,14 @@ export default function AdminOrdersPage() {
             <div>
               <p className="text-sm text-red-600 font-medium">Cancelled</p>
               <p className="text-2xl font-bold text-red-900">
-                {orders.filter(o => o.status === 'cancelled').length}
+                {filteredOrders.filter(o => o.status === 'cancelled').length}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Orders List */}
+      {/* Orders Table */}
       {orders.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-lg p-12 text-center">
           <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -275,144 +381,97 @@ export default function AdminOrdersPage() {
         </div>
       ) : (
         <>
-          <div className="space-y-4">
-            {currentOrders.map((order) => (
-            <div key={order.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-              {/* Order Header */}
-              <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex items-center gap-6">
-                    <div>
-                      <p className="text-xs text-gray-500">Order ID</p>
-                      <p className="font-medium text-gray-900">#{order.id}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">User ID</p>
-                      <p className="font-medium text-gray-900">#{order.user_id}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Date</p>
-                      <p className="font-medium text-gray-900">
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase border border-gray-200">Order ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase border border-gray-200">User ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase border border-gray-200">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase border border-gray-200">Total</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase border border-gray-200">Order Items</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase border border-gray-200">Shipping Address</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase border border-gray-200">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentOrders.map((order) => (
+                    <tr key={order.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 border border-gray-200 font-bold text-gray-900">#{order.id}</td>
+                      <td className="px-4 py-3 border border-gray-200 font-bold text-gray-900">#{order.user_id}</td>
+                      <td className="px-4 py-3 border border-gray-200 text-sm text-gray-900 whitespace-nowrap">
                         {new Date(order.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Total</p>
-                      <p className="font-medium text-gray-900">
+                      </td>
+                      <td className="px-4 py-3 border border-gray-200 font-bold text-gray-900 whitespace-nowrap">
                         IDR {formatIDR(order.total_amount)}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {updatingOrderId === order.id ? (
-                      <div className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase ${getStatusColor(order.status)} flex items-center gap-2`}>
-                        <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Updating...</span>
-                      </div>
-                    ) : (
-                      <select
-                        value={order.status}
-                        onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase ${getStatusColor(order.status)} border-0 cursor-pointer`}
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="processing">Processing</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Order Items */}
-              <div className="p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-4">Order Items</h3>
-                <div className="space-y-3">
-                  {order.items.map((item) => (
-                    <div key={item.id} className="flex gap-4 items-center">
-                      <div className="relative w-16 h-16 bg-gray-100 rounded flex-shrink-0">
-                        {item.product_image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={item.product_image}
-                            alt={item.product_name}
-                            className="w-full h-full object-cover rounded"
-                            onError={(e) => {
-                              console.error(`[Order #${order.id}] Image load error for ${item.product_name}`);
-                              // Replace with placeholder
-                              const parent = e.currentTarget.parentElement;
-                              if (parent) {
-                                e.currentTarget.remove();
-                                parent.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg></div>';
-                              }
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400">
-                            <Package className="w-6 h-6" />
+                      </td>
+                      <td className="px-4 py-3 border border-gray-200 text-sm text-gray-700">
+                        {order.items.map((item, idx) => (
+                          <div key={item.id}>
+                            {item.product_name} (x{item.quantity})
+                            {idx < order.items.length - 1 && ', '}
                           </div>
+                        ))}
+                      </td>
+                      <td className="px-4 py-3 border border-gray-200 text-sm text-gray-700">
+                        {order.shipping_address || '-'}
+                      </td>
+                      <td className="px-4 py-3 border border-gray-200">
+                        {updatingOrderId === order.id ? (
+                          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold uppercase ${getStatusColor(order.status)}`}>
+                            <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Updating...</span>
+                          </div>
+                        ) : (
+                          <select
+                            value={order.status}
+                            onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase ${getStatusColor(order.status)} border-0 cursor-pointer`}
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="processing">Processing</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
                         )}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900 text-sm">{item.product_name}</p>
-                        <p className="text-xs text-gray-600">
-                          IDR {formatIDR(item.price)} × {item.quantity}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-gray-900 text-sm">
-                          IDR {formatIDR(item.price * item.quantity)}
-                        </p>
-                      </div>
-                    </div>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-
-                {/* Shipping Address */}
-                {order.shipping_address && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <h4 className="text-xs font-semibold text-gray-900 mb-2">
-                      Shipping Address
-                    </h4>
-                    <p className="text-xs text-gray-600">{order.shipping_address}</p>
-                  </div>
-                )}
-              </div>
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
-
-        {/* Pagination */}
-        <div className="mt-8">
-          {/* Pagination Buttons */}
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
-            </button>
-
-            <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700">
-              Showing {indexOfFirstOrder + 1} to {Math.min(indexOfLastOrder, orders.length)} of {orders.length} orders
-            </div>
-
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
-            >
-              Next
-              <ChevronRight className="w-4 h-4" />
-            </button>
           </div>
-        </div>
+
+          {/* Pagination */}
+          <div className="mt-8">
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </button>
+
+              <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700">
+                Showing {indexOfFirstOrder + 1} to {Math.min(indexOfLastOrder, filteredOrders.length)} of {filteredOrders.length} orders
+              </div>
+
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </>
       )}
     </div>

@@ -45,6 +45,7 @@ def get_product_images(product: Product, color: Optional[str] = None, request: R
             url = convert_image_to_data_url(img.image, img.image_mimetype)
 
         images.append({
+            "id": img.id,  # Add image ID for easier matching on updates
             "url": url,
             "color": img.color,
             "display_order": img.display_order,
@@ -453,7 +454,7 @@ async def create_product(
 
     # Store multiple images/videos/gifs
     for idx, image_file in enumerate(images):
-        if image_file and image_file.filename:
+        if image_file and image_file.filename and image_file.filename.strip():
             image_binary = await image_file.read()
 
             # Determine media type based on MIME type
@@ -575,7 +576,8 @@ async def update_product(
     discount: Optional[str] = Form(None),
     voucher: Optional[str] = Form(None),
     replace_images: bool = Form(False),  # If true, replace all images; if false, add to existing
-    image_colors: Optional[str] = Form(None),  # JSON array of colors for each image
+    image_colors: Optional[str] = Form(None),  # JSON array of colors for each NEW image
+    existing_image_colors: Optional[str] = Form(None),  # JSON object mapping image IDs to colors for existing images
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
@@ -689,6 +691,37 @@ async def update_product(
             print(f"Error creating variants: {e}")
             raise
 
+    # Update colors of existing images
+    if existing_image_colors:
+        try:
+            colors_map = json.loads(existing_image_colors)  # {image_id: color}
+            print(f"Received existing_image_colors: {colors_map}")
+
+            for image_id_str, new_color in colors_map.items():
+                try:
+                    image_id = int(image_id_str)
+                    img = db.query(ProductImage).filter(
+                        ProductImage.id == image_id,
+                        ProductImage.product_id == product_id
+                    ).first()
+
+                    if img:
+                        img.color = new_color if new_color else None
+                        print(f"Updated color for image {img.id}: {img.color}")
+                    else:
+                        print(f"Image {image_id} not found for product {product_id}")
+                except ValueError:
+                    print(f"Invalid image ID: {image_id_str}")
+
+            # Commit the color updates
+            db.commit()
+            print("Committed existing image color updates")
+
+        except Exception as e:
+            print(f"Error updating existing image colors: {e}")
+            import traceback
+            traceback.print_exc()
+
     # Handle images update
     if images and len(images) > 0 and images[0].filename:
         # Parse image colors
@@ -703,7 +736,7 @@ async def update_product(
 
         # Add new images/videos/gifs
         for idx, image_file in enumerate(images):
-            if image_file and image_file.filename:
+            if image_file and image_file.filename and image_file.filename.strip():
                 image_binary = await image_file.read()
 
                 # Determine media type based on MIME type

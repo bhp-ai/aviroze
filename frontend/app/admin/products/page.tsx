@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Edit, Trash2, X, Tag, Ticket, Package, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { productsService, Product as APIProduct } from '@/lib/services/products';
 import { collectionsService } from '@/lib/services/collections';
 import { formatIDR } from '@/lib/utils/currency';
 import { exportToCSV, formatDateForCSV, formatCurrencyForCSV } from '@/lib/utils/csv-export';
+import { HexColorPicker } from 'react-colorful';
 
 // Map API Product type to local Product type
 interface Product extends APIProduct {
@@ -106,8 +107,10 @@ export default function ProductsPage() {
       expiryDate: '',
     },
   });
-  const [colorInput, setColorInput] = useState('');
+  const [colorInput, setColorInput] = useState('#000000');
   const [colorError, setColorError] = useState('');
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
   const [variantColorInput, setVariantColorInput] = useState('');
   const [variantSizeInput, setVariantSizeInput] = useState('');
   const [variantQuantityInput, setVariantQuantityInput] = useState<number>(0);
@@ -137,6 +140,23 @@ export default function ProductsPage() {
     fetchProducts();
     fetchCollections();
   }, []);
+
+  // Close color picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(event.target as Node)) {
+        setShowColorPicker(false);
+      }
+    };
+
+    if (showColorPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showColorPicker]);
 
   const fetchCollections = async () => {
     try {
@@ -334,6 +354,10 @@ export default function ProductsPage() {
 
       if (invalidFiles.length > 0) {
         setError(`Some files are too large. Videos and GIFs must be under 10MB. Large files: ${invalidFiles.map(f => f.name).join(', ')}`);
+        // Auto-dismiss error after 5 seconds
+        setTimeout(() => {
+          setError('');
+        }, 5000);
         return;
       }
 
@@ -426,15 +450,24 @@ export default function ProductsPage() {
         voucher: formData.voucher
       };
 
-
       if (editingProduct) {
+        // Collect ALL existing image colors using image IDs (including newly assigned and null values)
+        const existingImageColors: {[id: string]: string | null} = {};
+        formData.images.forEach((img: any) => {
+          if (typeof img === 'object' && img.id) {
+            // Use image ID as key instead of URL for reliable matching
+            existingImageColors[img.id.toString()] = img.color || null;
+          }
+        });
+
         // Update existing product
         await productsService.update(
           formData.id,
           productData,
           imageFiles.length > 0 ? imageFiles : undefined,
           replaceAllImages,
-          imageColors.length > 0 ? imageColors : undefined
+          imageColors.length > 0 ? imageColors : undefined,
+          Object.keys(existingImageColors).length > 0 ? existingImageColors : undefined
         );
       } else {
         // Add new product
@@ -912,17 +945,21 @@ export default function ProductsPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6">
-              {/* Error Display */}
-              {error && (
+              {/* Error Display - only show validation errors, not file size errors */}
+              {error && !error.includes('too large') && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
                   {error}
                 </div>
               )}
 
-              <div className="space-y-6">
-                {/* Basic Information */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
+              <div className="space-y-8">
+                {/* Basic Information Section */}
+                <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                    <span className="flex items-center justify-center w-8 h-8 bg-gray-900 text-white rounded-full text-sm">1</span>
+                    Basic Information
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4 ml-10">Enter the core details about your product</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -943,6 +980,7 @@ export default function ProductsPage() {
                             ? 'border-red-500 focus:border-red-500'
                             : 'border-gray-300 focus:border-gray-900'
                         }`}
+                        placeholder="e.g., Premium Cotton T-Shirt"
                         required
                       />
                       {validationErrors.name && (
@@ -969,11 +1007,45 @@ export default function ProductsPage() {
                             : 'border-gray-300 focus:border-gray-900'
                         }`}
                         rows={3}
+                        placeholder="Describe your product features, materials, and benefits..."
                         required
                       />
                       {validationErrors.description && (
                         <p className="mt-1 text-sm text-red-600">Must be at least 10 characters</p>
                       )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Price (IDR) *
+                      </label>
+                      <input
+                        type="number"
+                        step="1"
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                        placeholder="299000"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Enter price in Indonesian Rupiah</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Stock (Total Inventory) *
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.stock}
+                        onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                        placeholder="50"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Total units available (variants will share this pool)
+                      </p>
                     </div>
 
                     <div>
@@ -995,19 +1067,17 @@ export default function ProductsPage() {
                             ? 'border-red-500 focus:border-red-500'
                             : 'border-gray-300 focus:border-gray-900'
                         }`}
-                        placeholder="e.g., Fashion, Outerwear, Accessories"
+                        placeholder="e.g., T-Shirts, Dresses, Accessories"
                         required
                       />
-                      {validationErrors.category ? (
+                      {validationErrors.category && (
                         <p className="mt-1 text-sm text-red-600">Must be at least 3 characters</p>
-                      ) : (
-                        <p className="text-xs text-gray-500 mt-1">Enter any category name</p>
                       )}
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Collection
+                        Collection (Optional)
                       </label>
 
                       {/* Show dropdown if collections exist */}
@@ -1026,15 +1096,14 @@ export default function ProductsPage() {
                             }}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
                           >
-                            <option value="">Select a collection</option>
+                            <option value="">No collection</option>
                             {availableCollections.map((collection) => (
                               <option key={collection} value={collection}>
                                 {collection}
                               </option>
                             ))}
-                            <option value="__custom__">+ Add New Collection</option>
+                            <option value="__custom__">+ Create New Collection</option>
                           </select>
-                          <p className="text-xs text-gray-500">Select existing collection or add new</p>
                         </div>
                       ) : (
                         /* Show text input for custom collection */
@@ -1068,11 +1137,6 @@ export default function ProductsPage() {
                               </button>
                             )}
                           </div>
-                          <p className="text-xs text-gray-500">
-                            {showCustomCollection
-                              ? 'Enter new collection name'
-                              : 'Optional product line or collection name'}
-                          </p>
                         </div>
                       )}
                     </div>
@@ -1325,10 +1389,19 @@ export default function ProductsPage() {
                         accept="image/*,video/mp4,video/webm,video/quicktime"
                         multiple
                         onChange={handleImageChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-900 file:text-white hover:file:bg-gray-800 file:cursor-pointer"
                       />
-                      <p className="text-xs text-gray-500 mt-1">
-                        You can select multiple files. Videos and GIFs max 10MB each. Videos/GIFs will appear first.
+
+                      {/* Error message for file size - shown immediately below input */}
+                      {error && error.includes('too large') && (
+                        <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-sm text-red-700 font-medium">⚠️ {error}</p>
+                          <p className="text-xs text-red-600 mt-1">Please compress your files or choose smaller ones.</p>
+                        </div>
+                      )}
+
+                      <p className="text-xs text-gray-500 mt-2">
+                        💡 <strong>Tip:</strong> You can select multiple files. Videos and GIFs max 10MB each. Videos/GIFs will appear first.
                       </p>
 
                       {/* Replace all images checkbox - only show when editing */}
@@ -1365,32 +1438,80 @@ export default function ProductsPage() {
                                 <div key={color} className="mb-3">
                                   <p className="text-xs text-gray-600 mb-1 font-medium uppercase">{color}:</p>
                                   <div className="flex flex-wrap gap-2 pl-2">
-                                    {images.map((img, idx) => {
+                                    {images.map((img, imgIndex) => {
                                       const mediaUrl = typeof img === 'string' ? img : img.url;
                                       const mediaType = typeof img === 'object' ? img.media_type : 'image';
                                       const isVideo = mediaType === 'video';
                                       const isGif = mediaType === 'gif';
+                                      const currentColor = typeof img === 'object' && img.color ? img.color : null;
+
+                                      // Find the actual index in the full images array
+                                      const actualIndex = formData.images.findIndex((image: any) => {
+                                        const url = typeof image === 'string' ? image : image.url;
+                                        return url === mediaUrl;
+                                      });
 
                                       return (
-                                        <div key={idx} className="relative">
-                                          {isVideo ? (
-                                            <video
-                                              src={mediaUrl}
-                                              className="w-20 h-20 rounded object-cover border border-gray-300"
-                                              muted
-                                              loop
-                                            />
-                                          ) : (
-                                            <img
-                                              src={mediaUrl}
-                                              alt={`${color} ${idx + 1}`}
-                                              className="w-20 h-20 rounded object-cover border border-gray-300"
-                                            />
-                                          )}
-                                          {/* Media type badge */}
-                                          {(isVideo || isGif) && (
-                                            <div className="absolute top-1 left-1 bg-black bg-opacity-70 text-white text-xs px-1 rounded">
-                                              {isVideo ? 'VIDEO' : 'GIF'}
+                                        <div key={imgIndex} className="relative group">
+                                          <div className="relative">
+                                            {isVideo ? (
+                                              <video
+                                                src={mediaUrl}
+                                                className="w-20 h-20 rounded object-cover border border-gray-300"
+                                                muted
+                                                loop
+                                              />
+                                            ) : (
+                                              <img
+                                                src={mediaUrl}
+                                                alt={`${color} ${imgIndex + 1}`}
+                                                className="w-20 h-20 rounded object-cover border border-gray-300"
+                                              />
+                                            )}
+                                            {/* Media type badge */}
+                                            {(isVideo || isGif) && (
+                                              <div className="absolute top-1 left-1 bg-black bg-opacity-70 text-white text-xs px-1 rounded">
+                                                {isVideo ? 'VIDEO' : 'GIF'}
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          {/* Color selector for all media */}
+                                          {formData.colors && formData.colors.length > 0 && (
+                                            <div className="mt-1">
+                                              <select
+                                                value={currentColor || ''}
+                                                onChange={(e) => {
+                                                  const selectedColor = e.target.value;
+                                                  if (actualIndex !== -1) {
+                                                    // Update the color of this specific image
+                                                    const updatedImages = [...formData.images];
+                                                    if (typeof updatedImages[actualIndex] === 'object') {
+                                                      updatedImages[actualIndex] = {
+                                                        ...updatedImages[actualIndex],
+                                                        color: selectedColor || null
+                                                      };
+                                                    } else {
+                                                      // Convert string to object with color
+                                                      updatedImages[actualIndex] = {
+                                                        url: updatedImages[actualIndex],
+                                                        color: selectedColor || null,
+                                                        media_type: 'image',
+                                                        display_order: actualIndex
+                                                      };
+                                                    }
+                                                    setFormData({ ...formData, images: updatedImages });
+                                                  }
+                                                }}
+                                                className="w-20 text-xs px-1 py-1 border border-gray-300 rounded bg-white hover:border-gray-400"
+                                              >
+                                                <option value="">{currentColor ? 'Remove' : 'Assign'}</option>
+                                                {formData.colors.map((c) => (
+                                                  <option key={c} value={c}>
+                                                    {c}
+                                                  </option>
+                                                ))}
+                                              </select>
                                             </div>
                                           )}
                                         </div>
@@ -1493,54 +1614,50 @@ export default function ProductsPage() {
                         )}
                       </div>
                     </div>
+                  </div>
+                </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Price (IDR) *
-                      </label>
-                      <input
-                        type="number"
-                        step="1"
-                        value={formData.price}
-                        onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Stock (Initial Inventory)
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.stock}
-                        onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Total units in your inventory. Variants share from this pool.
-                      </p>
-                    </div>
+                {/* Media & Visual Section */}
+                <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                    <span className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-sm">2</span>
+                    Media & Colors
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4 ml-10">Upload images/videos and define available colors</p>
+                  <div className="space-y-4">
 
                     {/* Colors Section */}
-                    <div className="md:col-span-2">
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Product Colors
                       </label>
-                      <div className="flex gap-2 mb-2">
-                        <input
-                          type="color"
-                          value={colorInput || '#000000'}
-                          onChange={(e) => setColorInput(e.target.value)}
-                          className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
-                        />
+                      <div className="flex gap-2 mb-2 items-start">
+                        {/* Color Preview and Picker */}
+                        <div className="relative" ref={colorPickerRef}>
+                          <button
+                            type="button"
+                            onClick={() => setShowColorPicker(!showColorPicker)}
+                            className="w-12 h-10 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 transition-colors shadow-sm"
+                            style={{ backgroundColor: colorInput }}
+                            title="Click to open color picker"
+                          />
+                          {showColorPicker && (
+                            <div className="absolute top-12 left-0 z-50 bg-white p-3 rounded-lg shadow-xl border border-gray-200">
+                              <HexColorPicker color={colorInput} onChange={setColorInput} />
+                              <div className="mt-2 text-xs text-gray-600 text-center font-mono">
+                                {colorInput.toUpperCase()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
                         <input
                           type="text"
                           value={colorInput}
-                          onChange={(e) => setColorInput(e.target.value)}
+                          onChange={(e) => setColorInput(e.target.value.toUpperCase())}
                           placeholder="Enter hex color (e.g., #FF0000)"
-                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900"
+                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-900 font-mono"
+                          maxLength={7}
                         />
                         <button
                           type="button"
@@ -1560,9 +1677,10 @@ export default function ProductsPage() {
                               ...formData,
                               colors: [...(formData.colors || []), colorInput]
                             });
-                            setColorInput('');
+                            setColorInput('#000000');
+                            setShowColorPicker(false);
                           }}
-                          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors whitespace-nowrap"
                         >
                           Add Color
                         </button>
@@ -1612,17 +1730,28 @@ export default function ProductsPage() {
                         </div>
                       )}
                       <p className="text-xs text-gray-500 mt-2">
-                        💡 Enter a hex color code (e.g., #000000) and click "Add Color". Colors with media will show a green "✓ Media" badge.
+                        💡 <strong>Tip:</strong> Enter a hex color code (e.g., #000000) and click "Add Color". Colors with media will show a green "✓ Media" badge.
                       </p>
                     </div>
+                  </div>
+                </div>
 
-                    {/* Variants Section - Color + Size with Quantity */}
-                    <div className="md:col-span-2">
+                {/* Variants Section */}
+                <div className="bg-purple-50 p-6 rounded-lg border border-purple-200">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                    <span className="flex items-center justify-center w-8 h-8 bg-purple-600 text-white rounded-full text-sm">3</span>
+                    Product Variants
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4 ml-10">Define size and color combinations with stock quantities</p>
+                  <div className="space-y-4">
+
+                    {/* Variants Input */}
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Product Variants (Color + Size + Quantity)
+                        Add Variant (Color + Size + Quantity)
                       </label>
                       <p className="text-xs text-gray-500 mb-2">
-                        Track inventory per color and size combination (e.g., Gray-S: 10, Gray-M: 15, Navy-S: 8). Each variant represents a specific color+size stock.
+                        💡 <strong>Example:</strong> Gray-S: 10 units, Gray-M: 15 units, Navy-S: 8 units
                       </p>
                       <div className="flex gap-2 mb-2">
                         <select
@@ -1691,35 +1820,24 @@ export default function ProductsPage() {
                             }
 
                             if (editingVariant) {
-                                // Find the original variant being edited
-                                const originalVariant = updatedVariants.find(v =>
-                                  v.color === editingVariant.color && v.size === editingVariant.size
+                                // Check if color or size changed
+                                const colorOrSizeChanged =
+                                  editingVariant.color !== variantColorInput ||
+                                  editingVariant.size !== variantSizeInput;
+
+                                // Remove the original variant being edited
+                                updatedVariants = updatedVariants.filter(v =>
+                                  !(v.color === editingVariant.color && v.size === editingVariant.size)
                                 );
 
-                                if (originalVariant) {
-                                  const remainingQty = originalVariant.quantity - variantQuantityInput;
-
-                                  // Remove the original variant
-                                  updatedVariants = updatedVariants.filter(v =>
-                                    !(v.color === editingVariant.color && v.size === editingVariant.size)
-                                  );
-
-                                  // If there's remaining quantity, keep it with original color
-                                  if (remainingQty > 0) {
-                                    updatedVariants.push({
-                                      color: editingVariant.color,
-                                      size: editingVariant.size,
-                                      quantity: remainingQty
-                                    });
-                                  }
-
-                                  // Add the new variant with selected quantity and new color
+                                if (colorOrSizeChanged) {
+                                  // If color or size changed, check if target variant exists
                                   const existingNewColorIndex = updatedVariants.findIndex(
                                     v => v.color === variantColorInput && v.size === variantSizeInput
                                   );
 
                                   if (existingNewColorIndex >= 0) {
-                                    // Add to existing variant with same color+size
+                                    // Merge with existing variant
                                     updatedVariants[existingNewColorIndex].quantity += variantQuantityInput;
                                   } else {
                                     // Create new variant
@@ -1729,17 +1847,39 @@ export default function ProductsPage() {
                                       quantity: variantQuantityInput
                                     });
                                   }
+                                } else {
+                                  // Just updating quantity for same color+size
+                                  updatedVariants.push({
+                                    color: variantColorInput,
+                                    size: variantSizeInput,
+                                    quantity: variantQuantityInput
+                                  });
                                 }
+
                                 setEditingVariant(null);
                               } else {
-                                // Check if exact variant exists (same color and size)
-                                const exactMatchIndex = updatedVariants.findIndex(
+                                // Check if exact variant exists (same color, size, AND quantity)
+                                const exactDuplicateIndex = updatedVariants.findIndex(
+                                  v => v.color === variantColorInput &&
+                                       v.size === variantSizeInput &&
+                                       v.quantity === variantQuantityInput
+                                );
+
+                                if (exactDuplicateIndex >= 0) {
+                                  // Exact duplicate exists - show info message
+                                  setVariantError(`This variant already exists: ${variantColorInput || 'No Color'}-${variantSizeInput} with ${variantQuantityInput} units. Use the edit button to modify it.`);
+                                  setTimeout(() => setVariantError(''), 5000);
+                                  return;
+                                }
+
+                                // Check if variant exists with same color and size (but different quantity)
+                                const sameColorSizeIndex = updatedVariants.findIndex(
                                   v => v.color === variantColorInput && v.size === variantSizeInput
                                 );
 
-                                if (exactMatchIndex >= 0) {
-                                  // Update existing variant
-                                  updatedVariants[exactMatchIndex] = {
+                                if (sameColorSizeIndex >= 0) {
+                                  // Update existing variant quantity
+                                  updatedVariants[sameColorSizeIndex] = {
                                     color: variantColorInput,
                                     size: variantSizeInput,
                                     quantity: variantQuantityInput
@@ -1785,7 +1925,16 @@ export default function ProductsPage() {
                         </button>
                       </div>
                       {variantError && (
-                        <p className="text-sm text-red-600 mt-2">{variantError}</p>
+                        <div className={`mt-2 p-3 rounded-lg border ${
+                          variantError.includes('already exists')
+                            ? 'bg-blue-50 border-blue-200 text-blue-700'
+                            : 'bg-red-50 border-red-200 text-red-700'
+                        }`}>
+                          <p className="text-sm font-medium">
+                            {variantError.includes('already exists') ? 'ℹ️ ' : '⚠️ '}
+                            {variantError}
+                          </p>
+                        </div>
                       )}
                       {formData.variants && formData.variants.length > 0 && (
                         <div>
@@ -1865,19 +2014,27 @@ export default function ProductsPage() {
                         </div>
                       )}
                       <p className="text-xs text-gray-500 mt-2">
-                        💡 Select a color, enter size and quantity, then click "Add Variant". To update existing variants, click the pencil icon.
+                        💡 <strong>Tip:</strong> Select a color, enter size and quantity, then click "Add Variant". To update existing variants, click the pencil icon.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Discount Section */}
-                <div className="border-t border-gray-200 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                      <Tag className="w-5 h-5" />
-                      Discount
-                    </h3>
+                {/* Pricing & Promotions Section */}
+                <div className="bg-green-50 p-6 rounded-lg border border-green-200">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                    <span className="flex items-center justify-center w-8 h-8 bg-green-600 text-white rounded-full text-sm">4</span>
+                    Pricing & Promotions
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-4 ml-10">Set up discounts and voucher codes (optional)</p>
+
+                  {/* Discount Section */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+                        <Tag className="w-5 h-5" />
+                        Discount
+                      </h4>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -1940,15 +2097,15 @@ export default function ProductsPage() {
                       </div>
                     </div>
                   )}
-                </div>
+                  </div>
 
-                {/* Voucher Section */}
-                <div className="border-t border-gray-200 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                      <Ticket className="w-5 h-5" />
-                      Voucher
-                    </h3>
+                  {/* Voucher Section */}
+                  <div className="border-t border-gray-300 pt-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+                        <Ticket className="w-5 h-5" />
+                        Voucher
+                      </h4>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -2060,6 +2217,7 @@ export default function ProductsPage() {
                       </div>
                     </div>
                   )}
+                  </div>
                 </div>
               </div>
 

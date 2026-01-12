@@ -15,6 +15,7 @@ class VoucherBase(BaseModel):
     expiry_date: Optional[datetime] = None
 
 class ProductImageBase(BaseModel):
+    id: Optional[int] = None  # Image ID for updating colors of existing images
     url: str
     color: Optional[str] = None
     display_order: int
