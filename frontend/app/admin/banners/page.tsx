@@ -351,7 +351,7 @@ function BannerModal({ banner, isOpen, onClose, onSuccess }: BannerModalProps) {
       };
 
       if (banner) {
-        await bannerService.updateBanner(banner.id, data);
+        await bannerService.updateBanner(banner.id, data as any);
       } else {
         await bannerService.createBanner(data as any);
       }

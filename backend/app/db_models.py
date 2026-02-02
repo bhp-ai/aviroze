@@ -104,6 +104,9 @@ class Collection(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # Relationship: One collection has many products
+    products = relationship("Product", back_populates="collection_rel", cascade="all, delete-orphan")
+
 # Product Model
 class Product(Base):
     __tablename__ = "products"
@@ -113,11 +116,15 @@ class Product(Base):
     description = Column(Text, nullable=False)
     price = Column(Float, nullable=False)
     category = Column(String(100), nullable=False, index=True)  # Changed from Enum to String for flexibility
-    collection = Column(String(100), nullable=True, index=True)  # Collection/Product line
-    size_guide = Column(JSON, nullable=True)  # Size guide with measurements (e.g., [{"size": "S", "chest": "24", "waist": "38"}])
+    
+    # Foreign key to Collection
+    collection_id = Column(Integer, ForeignKey("collections.id", ondelete="SET NULL"), nullable=True, index=True)
+    collection = Column(String(100), nullable=True, index=True)  # Kept for backward compatibility if needed
+    
+    size_guide = Column(JSON, nullable=True)  # Size guide with measurements
     stock = Column(Integer, default=0, nullable=False)
-    image = Column(LargeBinary, nullable=True)  # Kept for backward compatibility (primary image)
-    image_mimetype = Column(String(50), nullable=True)  # Store MIME type (e.g., image/jpeg, image/png)
+    image = Column(LargeBinary, nullable=True)  # Primary image
+    image_mimetype = Column(String(50), nullable=True)  # Store MIME type
     colors = Column(JSON, nullable=True, default=list)  # Array of color names
     sizes = Column(JSON, nullable=True, default=list)  # Array of size options
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -136,10 +143,11 @@ class Product(Base):
     voucher_expiry_date = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
+    collection_rel = relationship("Collection", back_populates="products")  # Many-to-one with Collection
     comments = relationship("ProductComment", back_populates="product", cascade="all, delete-orphan")
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan", order_by="ProductImage.display_order")
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
-
+    
 # Product Image Model
 class ProductImage(Base):
     __tablename__ = "product_images"
