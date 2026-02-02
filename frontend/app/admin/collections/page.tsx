@@ -2,14 +2,25 @@
 
 import { useState, useEffect } from 'react';
 import { collectionsService, Collection } from '@/lib/services/collections';
-import { Package, Plus, Edit, Trash2, X, Upload, Image as ImageIcon } from 'lucide-react';
+import { productsService, Product } from '@/lib/services/products';
+import { Package, Plus, Edit, Trash2, X, Upload, Image as ImageIcon, ArrowLeft, ShoppingBag } from 'lucide-react';
+
+interface CollectionWithProducts extends Collection {
+  productCount: number;
+  productNames: string[];
+}
 
 export default function AdminCollectionsPage() {
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const [collections, setCollections] = useState<CollectionWithProducts[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
+
+  // Product view state
+  const [selectedCollection, setSelectedCollection] = useState<CollectionWithProducts | null>(null);
+  const [collectionProducts, setCollectionProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -28,7 +39,29 @@ export default function AdminCollectionsPage() {
       setLoading(true);
       setError('');
       const data = await collectionsService.getAll();
-      setCollections(data);
+
+      // Fetch product counts for each collection
+      const collectionsWithProducts = await Promise.all(
+        data.map(async (collection) => {
+          try {
+            const products = await productsService.getAll({ collection: collection.name });
+            return {
+              ...collection,
+              productCount: products.length,
+              productNames: products.slice(0, 3).map(p => p.name) // Get first 3 product names
+            };
+          } catch (err) {
+            console.error(`Error fetching products for ${collection.name}:`, err);
+            return {
+              ...collection,
+              productCount: 0,
+              productNames: []
+            };
+          }
+        })
+      );
+
+      setCollections(collectionsWithProducts);
     } catch (err: any) {
       setError('Failed to load collections');
       console.error(err);
@@ -82,21 +115,37 @@ export default function AdminCollectionsPage() {
 
     try {
       if (editingCollection) {
+        console.log('Updating collection:', editingCollection.id, formData);
         await collectionsService.update(editingCollection.id, formData, imageFile || undefined);
       } else {
-        await collectionsService.create(formData, imageFile || undefined);
+        console.log('Creating collection:', formData);
+        const result = await collectionsService.create(formData, imageFile || undefined);
+        console.log('Collection created:', result);
       }
       await fetchCollections();
       handleCloseModal();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to save collection');
+      console.error('Error saving collection:', err);
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to save collection';
+      setError(errorMessage);
+      alert(`Error: ${errorMessage}`); // Show alert so you definitely see the error
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this collection?')) return;
+    // Find the collection to get its name and product count
+    const collection = collections.find(c => c.id === id);
+    if (!collection) return;
+
+    // Check if collection has products
+    if (collection.productCount > 0) {
+      const confirmMessage = `This collection has ${collection.productCount} product${collection.productCount > 1 ? 's' : ''}. Deleting this collection will NOT delete the products, but they will no longer be grouped under this collection.\n\nAre you sure you want to continue?`;
+      if (!confirm(confirmMessage)) return;
+    } else {
+      if (!confirm('Are you sure you want to delete this collection?')) return;
+    }
 
     try {
       setLoading(true);
@@ -109,6 +158,138 @@ export default function AdminCollectionsPage() {
     }
   };
 
+  const handleViewProducts = async (collection: CollectionWithProducts) => {
+    setSelectedCollection(collection);
+    setLoadingProducts(true);
+    try {
+      const products = await productsService.getAll({ collection: collection.name });
+      setCollectionProducts(products);
+    } catch (err: any) {
+      setError('Failed to load products');
+      console.error(err);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  const handleBackToCollections = () => {
+    setSelectedCollection(null);
+    setCollectionProducts([]);
+  };
+
+  // If viewing products for a collection
+  if (selectedCollection) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="container mx-auto px-4">
+          {/* Header with Back Button */}
+          <div className="mb-8">
+            <button
+              onClick={handleBackToCollections}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Collections
+            </button>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">{selectedCollection.name}</h1>
+                <p className="text-gray-600 mt-1">
+                  {collectionProducts.length} {collectionProducts.length === 1 ? 'product' : 'products'} in this collection
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Loading */}
+          {loadingProducts ? (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+            </div>
+          ) : (
+            <>
+              {/* Products Table */}
+              {collectionProducts.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-lg shadow">
+                  <ShoppingBag className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">No products in this collection</p>
+                  <p className="text-gray-400 text-sm mt-2">Add products to this collection from the Products page</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Product
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Category
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Price
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Stock
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {collectionProducts.map((product) => (
+                        <tr key={product.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="h-10 w-10 flex-shrink-0">
+                                {product.images && product.images.length > 0 ? (
+                                  <img
+                                    className="h-10 w-10 rounded object-cover"
+                                    src={typeof product.images[0] === 'string' ? product.images[0] : product.images[0].url}
+                                    alt={product.name}
+                                  />
+                                ) : (
+                                  <div className="h-10 w-10 rounded bg-gray-200 flex items-center justify-center">
+                                    <Package className="w-5 h-5 text-gray-400" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{product.category}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">${product.price.toFixed(2)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{product.stock}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              product.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {product.stock > 0 ? 'In Stock' : 'Out of Stock'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Default collections view
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="container mx-auto px-4">
@@ -169,26 +350,40 @@ export default function AdminCollectionsPage() {
 
                     {/* Collection Info */}
                     <div className="p-4">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">{collection.name}</h3>
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">{collection.name}</h3>
+                        <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded">
+                          {collection.productCount} {collection.productCount === 1 ? 'Product' : 'Products'}
+                        </span>
+                      </div>
                       <p className="text-sm text-gray-600 mb-4 line-clamp-2">
                         {collection.description || 'No description'}
                       </p>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2">
+                      <div className="space-y-2">
                         <button
-                          onClick={() => handleOpenModal(collection)}
-                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
+                          onClick={() => handleViewProducts(collection)}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors"
                         >
-                          <Edit className="w-4 h-4" />
-                          Edit
+                          <ShoppingBag className="w-4 h-4" />
+                          View Products ({collection.productCount})
                         </button>
-                        <button
-                          onClick={() => handleDelete(collection.id)}
-                          className="px-4 py-2 border border-red-300 text-red-600 rounded hover:bg-red-50 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleOpenModal(collection)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors"
+                          >
+                            <Edit className="w-4 h-4" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(collection.id)}
+                            className="px-4 py-2 border border-red-300 text-red-600 rounded hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

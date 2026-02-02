@@ -478,6 +478,24 @@ export default function ProductsPage() {
         );
       }
 
+      // Auto-create collection if it's a new collection name
+      if (formData.collection && !availableCollections.includes(formData.collection)) {
+        try {
+          await collectionsService.create({
+            name: formData.collection,
+            description: `${formData.collection} collection`
+          });
+          console.log(`Collection "${formData.collection}" created automatically`);
+          // Refresh collections list
+          await fetchCollections();
+        } catch (collectionErr: any) {
+          // If collection already exists (race condition), ignore the error
+          if (!collectionErr.response?.data?.detail?.includes('already exists')) {
+            console.error('Failed to create collection:', collectionErr);
+          }
+        }
+      }
+
       // Refresh products list
       await fetchProducts();
       handleCloseModal();
@@ -1137,6 +1155,13 @@ export default function ProductsPage() {
                               </button>
                             )}
                           </div>
+                          {editingProduct && formData.collection && !availableCollections.includes(formData.collection) && (
+                            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                              <p className="text-sm text-yellow-800">
+                                <strong>Warning:</strong> The collection "{formData.collection}" no longer exists. You can keep this name (it will create a new collection) or change it to an existing collection.
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

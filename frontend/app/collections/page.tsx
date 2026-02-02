@@ -34,40 +34,56 @@ export default function CollectionsPage() {
 
       // Get collections from Collection model ONLY
       const collectionsFromDB = await collectionsService.getAll();
+      console.log('Collections from DB:', collectionsFromDB);
 
       // Fetch product counts for each collection
       const collectionsWithData: CollectionData[] = [];
 
       for (const collection of collectionsFromDB) {
-        // Get products for this collection to count them
-        const products = await productsService.getAll({ collection: collection.name });
+        try {
+          // Get products for this collection to count them
+          const products = await productsService.getAll({ collection: collection.name });
+          console.log(`Products for ${collection.name}:`, products.length);
 
-        // Use collection's uploaded image, or fallback to first product image or placeholder
-        let collectionImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&h=600&fit=crop';
+          // Use collection's uploaded image, or fallback to first product image or placeholder
+          let collectionImage = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&h=600&fit=crop';
 
-        if (collection.image_url) {
-          // Use the uploaded collection image from Collection table
-          collectionImage = collection.image_url;
-        } else if (products.length > 0 && products[0].images && products[0].images.length > 0) {
-          // Fallback to first product's first image
-          const firstImage = products[0].images[0];
-          collectionImage = typeof firstImage === 'string' ? firstImage : firstImage.url;
+          if (collection.image_url) {
+            // Use the uploaded collection image from Collection table
+            collectionImage = collection.image_url;
+          } else if (products.length > 0 && products[0].images && products[0].images.length > 0) {
+            // Fallback to first product's first image
+            const firstImage = products[0].images[0];
+            collectionImage = typeof firstImage === 'string' ? firstImage : firstImage.url;
+          }
+
+          collectionsWithData.push({
+            id: collection.id,
+            title: collection.name,
+            subtitle: `${products.length} ${products.length === 1 ? 'Item' : 'Items'}`,
+            description: collection.description || `Explore our ${collection.name} collection featuring ${products.length} carefully selected products.`,
+            image: collectionImage,
+            items: products.length,
+          });
+        } catch (productErr: any) {
+          console.error(`Error fetching products for ${collection.name}:`, productErr);
+          // Still add the collection even if product fetch fails
+          collectionsWithData.push({
+            id: collection.id,
+            title: collection.name,
+            subtitle: '0 Items',
+            description: collection.description || `Explore our ${collection.name} collection.`,
+            image: collection.image_url || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&h=600&fit=crop',
+            items: 0,
+          });
         }
-
-        collectionsWithData.push({
-          id: collection.id,
-          title: collection.name,
-          subtitle: `${products.length} ${products.length === 1 ? 'Item' : 'Items'}`,
-          description: collection.description || `Explore our ${collection.name} collection featuring ${products.length} carefully selected products.`,
-          image: collectionImage,
-          items: products.length,
-        });
       }
 
+      console.log('Final collections data:', collectionsWithData);
       setCollections(collectionsWithData);
     } catch (err: any) {
       setError('Failed to load collections');
-      console.error(err);
+      console.error('Error in fetchCollections:', err);
     } finally {
       setLoading(false);
     }

@@ -27,39 +27,6 @@ export default function AboutPage() {
     },
   ];
 
-  const values = [
-    {
-      icon: <Heart className="w-8 h-8" />,
-      title: 'Passion for Fashion',
-      description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-    },
-    {
-      icon: <Award className="w-8 h-8" />,
-      title: 'Quality Excellence',
-      description: 'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.',
-    },
-    {
-      icon: <Users className="w-8 h-8" />,
-      title: 'Customer First',
-      description: 'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.',
-    },
-    {
-      icon: <TrendingUp className="w-8 h-8" />,
-      title: 'Innovation',
-      description: 'Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.',
-    },
-    {
-      icon: <Sparkles className="w-8 h-8" />,
-      title: 'Sustainability',
-      description: 'Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.',
-    },
-    {
-      icon: <Target className="w-8 h-8" />,
-      title: 'Empowerment',
-      description: 'Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores.',
-    },
-  ];
-
   const milestones = [
     { year: '2018', event: 'Company Founded' },
     { year: '2019', event: 'First Flagship Store' },
@@ -100,20 +67,13 @@ export default function AboutPage() {
             </h2>
             <div className="space-y-4 text-gray-600 leading-relaxed">
               <p>
-                Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
-                tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
-                quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo
-                consequat.
+                Aviroze was born from a simple yet powerful vision: to create fashion that celebrates every woman's unique beauty and strength. What started as a small boutique in 2018 has blossomed into a global brand dedicated to empowering women through exceptional design and quality craftsmanship.
               </p>
               <p>
-                Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore
-                eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident,
-                sunt in culpa qui officia deserunt mollit anim id est laborum.
+                Our founder, Sarah Johnson, noticed a gap in the market for fashion that was both sophisticated and accessible, trendy yet timeless. With a background in haute couture and a passion for sustainable practices, she assembled a team of talented designers and visionaries who shared her dream of revolutionizing women's fashion.
               </p>
               <p>
-                Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium
-                doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore
-                veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+                Today, Aviroze stands at the intersection of elegance and innovation. We curate collections that speak to the modern woman—confident, dynamic, and unapologetically herself. Each piece is thoughtfully designed to transition seamlessly from boardroom to evening out, ensuring you always look and feel your best.
               </p>
             </div>
           </div>
@@ -134,10 +94,7 @@ export default function AboutPage() {
               Our Mission
             </h3>
             <p className="text-gray-600 leading-relaxed">
-              Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit,
-              sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
-              Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur,
-              adipisci velit.
+              To empower women worldwide by creating exceptional fashion that combines timeless elegance with contemporary style. We are committed to delivering superior quality, sustainable practices, and designs that inspire confidence and celebrate individuality in every woman who wears our pieces.
             </p>
           </div>
           <div className="bg-gray-50 p-8 rounded-lg">
@@ -145,10 +102,7 @@ export default function AboutPage() {
               Our Vision
             </h3>
             <p className="text-gray-600 leading-relaxed">
-              Sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam
-              aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum
-              exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea
-              commodi consequatur.
+              To become the leading global fashion brand that champions women's empowerment, sustainability, and inclusivity. We envision a world where every woman has access to beautiful, responsibly-made fashion that makes her feel extraordinary, while we continue to set new standards for ethical and innovative practices in the fashion industry.
             </p>
           </div>
         </div>
@@ -160,24 +114,76 @@ export default function AboutPage() {
               Our Values
             </h2>
             <p className="text-gray-600 max-w-2xl mx-auto">
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
-              tempor incididunt ut labore et dolore magna aliqua.
+              These core principles guide everything we do, from design to delivery, ensuring we create fashion that makes a positive impact on both our customers and the world.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {values.map((value, index) => (
-              <div key={index} className="text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-900 text-white rounded-full mb-4">
-                  {value.icon}
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  {value.title}
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  {value.description}
-                </p>
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-900 text-white rounded-full mb-4">
+                <Heart className="w-8 h-8" />
               </div>
-            ))}
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Passion for Fashion
+              </h3>
+              <p className="text-gray-600 text-sm">
+                We believe fashion is more than clothing—it is self-expression, confidence, and artistry. Every piece we create reflects our deep love for design and our commitment to helping women feel beautiful.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-900 text-white rounded-full mb-4">
+                <Award className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Quality Excellence
+              </h3>
+              <p className="text-gray-600 text-sm">
+                From fabric selection to final stitch, we maintain uncompromising standards. Our pieces are crafted to last, combining timeless design with meticulous attention to detail that you can see and feel.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-900 text-white rounded-full mb-4">
+                <Users className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Customer First
+              </h3>
+              <p className="text-gray-600 text-sm">
+                Your satisfaction drives everything we do. We listen, adapt, and continuously improve to ensure every shopping experience exceeds expectations and builds lasting relationships with our community.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-900 text-white rounded-full mb-4">
+                <TrendingUp className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Innovation
+              </h3>
+              <p className="text-gray-600 text-sm">
+                We stay ahead of trends while honoring classic elegance. Through innovative design techniques and modern silhouettes, we create fashion that is both contemporary and timeless.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-900 text-white rounded-full mb-4">
+                <Sparkles className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Sustainability
+              </h3>
+              <p className="text-gray-600 text-sm">
+                Fashion should never come at the planet's expense. We are committed to eco-friendly materials, ethical production, and responsible practices that protect our environment for future generations.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-900 text-white rounded-full mb-4">
+                <Target className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Empowerment
+              </h3>
+              <p className="text-gray-600 text-sm">
+                Every woman deserves to feel powerful and confident. Our designs celebrate femininity in all its forms, empowering you to embrace your unique style and own every moment.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -188,8 +194,7 @@ export default function AboutPage() {
               Our Journey
             </h2>
             <p className="text-gray-600 max-w-2xl mx-auto">
-              Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam
-              nihil molestiae consequatur.
+              From a single boutique to a global fashion destination, discover the milestones that have shaped Aviroze into the brand we are today.
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
@@ -212,8 +217,7 @@ export default function AboutPage() {
               Meet Our Team
             </h2>
             <p className="text-gray-600 max-w-2xl mx-auto">
-              Vel illum qui dolorem eum fugiat quo voluptas nulla pariatur at vero eos
-              et accusamus et iusto odio dignissimos.
+              The passionate visionaries behind Aviroze who bring creativity, expertise, and dedication to every collection we create.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -264,8 +268,7 @@ export default function AboutPage() {
             Ready to Explore Our Collections?
           </h2>
           <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
-            tempor incididunt ut labore et dolore magna aliqua.
+            Discover curated collections designed to elevate your wardrobe and celebrate your unique style. From timeless classics to contemporary trends, find pieces that speak to you.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
